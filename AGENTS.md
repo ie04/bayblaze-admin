@@ -27,12 +27,18 @@ large tap targets, and scan-friendly status chips.
 
 ## API Boundary
 
-- The browser app must strictly call `bayblaze-api`.
+- The browser app must strictly call `bayblaze-api` for BayBlaze operational
+  data.
 - It must not import Firebase SDKs, Firestore collection names, Firebase
-  Storage APIs, Medusa admin clients, Google Maps clients, service tokens, or
-  backend-only credentials.
+  Storage APIs, Medusa admin clients, service tokens, or backend-only
+  credentials.
+- The live driver map uses the Google Maps JavaScript API with a public browser
+  key restricted to `admin.bayblaze.net`. This key is separate from the
+  server-only `GOOGLE_MAPS_API_KEY` used by `bayblaze-api`.
 - Required browser variable:
   `VITE_BAYBLAZE_API_URL=https://api.bayblaze.net`.
+- Required for the Google driver map widget:
+  `VITE_GOOGLE_MAPS_BROWSER_API_KEY=<browser restricted Maps JavaScript key>`.
 - Local development may use:
   `VITE_BAYBLAZE_API_URL=http://localhost:3040`.
 
@@ -71,13 +77,15 @@ write account docs from the dashboard.
 - Search accounts and grant/remove roles.
 - Disable/enable accounts.
 - Toggle account-level age verification bypass for testing.
-- View drivers on an API-provided map snapshot.
+- View drivers on a Google Maps JavaScript map widget using API-provided live
+  location snapshots.
 - View driver delivery route stop geometry.
 - Create an API-generated isochrone/coverage plot.
 - View live Medusa orders and order details through `bayblaze-api`.
 
-The dashboard renders lightweight SVG plots from API data. It must not call
-paid Google Maps APIs directly from browser code.
+The dashboard renders route and isochrone plots from API data. The live driver
+map is the one browser Google Maps integration and must use a restricted public
+browser key, never the server-side Google Maps key.
 
 ## Deployment Assumptions
 

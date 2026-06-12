@@ -4,14 +4,12 @@ import {
   CircleOff,
   ClipboardList,
   LogOut,
-  Map,
   MapPinned,
   Navigation,
   RefreshCw,
   Route,
   Search,
   ShieldCheck,
-  Truck,
   UserCog,
 } from "lucide-react";
 
@@ -30,6 +28,7 @@ import {
 } from "./lib/adminApi";
 import type { Account, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, LatLng, MedusaOrder, Session } from "./lib/types";
 import { cx } from "./lib/classes";
+import { hasGoogleMapsBrowserKey, loadGoogleMaps } from "./lib/googleMaps";
 
 type View = "accounts" | "drivers" | "routes" | "coverage" | "orders";
 
@@ -556,41 +555,114 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function DriverMap({ drivers }: { drivers: DriverMapEntry[] }) {
+  const mapRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+
+    void renderGoogleDriverMap(node, drivers);
+  }, [drivers]);
   const positioned = drivers.filter((driver) => driver.location) as Array<DriverMapEntry & { location: LatLng }>;
 
   if (positioned.length === 0) {
     return <EmptyState title="No live locations">Clocked-in driver locations will appear here.</EmptyState>;
   }
 
-  const bounds = getBounds(positioned.map((driver) => driver.location));
+  if (!hasGoogleMapsBrowserKey()) {
+    return (
+      <ErrorState>
+        Set VITE_GOOGLE_MAPS_BROWSER_API_KEY on the admin app to render the Google Maps driver widget.
+      </ErrorState>
+    );
+  }
 
   return (
     <Card className="overflow-hidden p-0">
-      <div className="relative min-h-[360px] bg-[linear-gradient(90deg,rgba(227,224,218,0.7)_1px,transparent_1px),linear-gradient(rgba(227,224,218,0.7)_1px,transparent_1px)] bg-[size:36px_36px]">
-        <div className="absolute left-4 top-4 flex items-center gap-2 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
-          <Map size={16} aria-hidden="true" />
+      <div className="relative min-h-[420px]">
+        <div ref={mapRef} className="absolute inset-0" />
+        <div className="pointer-events-none absolute left-4 top-4 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
           {positioned.length} live
         </div>
-        {positioned.map((driver) => {
-          const point = project(driver.location, bounds);
-          return (
-            <div
-              key={driver.uid}
-              className="absolute -translate-x-1/2 -translate-y-1/2"
-              style={{ left: `${point.x}%`, top: `${point.y}%` }}
-            >
-              <div className="grid size-12 place-items-center rounded-full border-4 border-white bg-[var(--bb-success)] text-white shadow-[0_10px_24px_rgba(17,17,17,0.22)]">
-                <Truck size={20} aria-hidden="true" />
-              </div>
-              <div className="mt-1 whitespace-nowrap rounded-full bg-white px-2 py-1 text-xs font-black shadow-[var(--bb-shadow-soft)]">
-                {driver.displayName}
-              </div>
-            </div>
-          );
-        })}
       </div>
     </Card>
   );
+}
+
+async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverMapEntry[]) {
+  const maps = await loadGoogleMaps();
+  const positioned = drivers.filter((driver) => driver.location) as Array<DriverMapEntry & { location: LatLng }>;
+
+  if (positioned.length === 0) {
+    return;
+  }
+
+  const center = averageLatLng(positioned.map((driver) => driver.location));
+  const map = new maps.Map(container, {
+    center,
+    clickableIcons: false,
+    fullscreenControl: true,
+    mapTypeControl: false,
+    streetViewControl: false,
+    zoom: positioned.length === 1 ? 14 : 11,
+  });
+  const bounds = new maps.LatLngBounds();
+  const infoWindow = new maps.InfoWindow();
+
+  positioned.forEach((driver) => {
+    const position = { lat: driver.location.lat, lng: driver.location.lng };
+    const marker = new maps.Marker({
+      icon: {
+        anchor: new maps.Point(18, 18),
+        path: maps.SymbolPath.CIRCLE,
+        fillColor: driver.clockedIn ? "#2f8f46" : "#6d716b",
+        fillOpacity: 1,
+        scale: 10,
+        strokeColor: "#ffffff",
+        strokeWeight: 4,
+      },
+      label: {
+        color: "#ffffff",
+        fontSize: "11px",
+        fontWeight: "800",
+        text: driver.displayName.slice(0, 1).toUpperCase(),
+      },
+      map,
+      position,
+      title: driver.displayName,
+    });
+
+    marker.addListener("click", () => {
+      infoWindow.setContent([
+        `<div style="font-family:Jost,Arial,sans-serif;min-width:190px;color:#111">`,
+        `<strong style="font-size:15px">${escapeHtml(driver.displayName)}</strong>`,
+        `<div style="margin-top:4px;color:#6d716b;font-weight:700">${escapeHtml(driver.email)}</div>`,
+        `<div style="margin-top:8px;font-weight:800">${driver.clockedIn ? "Clocked in" : "Offline"}</div>`,
+        `<div style="color:#6d716b;font-weight:700">Vehicle: ${escapeHtml(driver.activeVehicle?.label || "None")}</div>`,
+        `<div style="color:#6d716b;font-weight:700">Stops: ${driver.queue?.stopCount ?? 0}</div>`,
+        `</div>`,
+      ].join(""));
+      infoWindow.open({ anchor: marker, map });
+    });
+
+    bounds.extend(position);
+  });
+
+  if (positioned.length > 1) {
+    map.fitBounds(bounds, 72);
+  }
+}
+
+function averageLatLng(points: LatLng[]) {
+  return {
+    lat: points.reduce((sum, point) => sum + point.lat, 0) / points.length,
+    lng: points.reduce((sum, point) => sum + point.lng, 0) / points.length,
+  };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;");
 }
 
 function RoutePlot({ points }: { points: LatLng[] }) {
