@@ -1,0 +1,128 @@
+import type { Account, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, MedusaOrder, Session } from "./types";
+
+const apiBaseUrl = (import.meta.env.VITE_BAYBLAZE_API_URL || "https://api.bayblaze.net").replace(/\/$/, "");
+const sessionKey = "bayblaze_admin_session";
+
+type RequestOptions = {
+  body?: unknown;
+  method?: string;
+  token?: string;
+};
+
+export function loadStoredSession(): Session | null {
+  const raw = window.localStorage.getItem(sessionKey);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as Session;
+  } catch {
+    window.localStorage.removeItem(sessionKey);
+    return null;
+  }
+}
+
+export function storeSession(session: Session | null) {
+  if (!session) {
+    window.localStorage.removeItem(sessionKey);
+    return;
+  }
+
+  window.localStorage.setItem(sessionKey, JSON.stringify(session));
+}
+
+export async function login(email: string, password: string): Promise<Session> {
+  const payload = await request<{ account: Account; session: { token: string } }>("/v1/auth/login", {
+    body: { email, password },
+    method: "POST",
+  });
+
+  if (!payload.account.roles.includes("admin")) {
+    throw new Error("This account does not have admin access.");
+  }
+
+  return {
+    account: payload.account,
+    token: payload.session.token,
+  };
+}
+
+export function searchAccounts(token: string, query: string) {
+  return request<{ accounts: Account[] }>(`/v1/admin/accounts?q=${encodeURIComponent(query)}&limit=50`, { token });
+}
+
+export function updateAccount(token: string, uid: string, input: {
+  disabled?: boolean;
+  roles?: AccountRole[];
+  settings?: { ageVerificationDisabled?: boolean };
+}) {
+  return request<{ account: Account }>(`/v1/admin/accounts/${encodeURIComponent(uid)}`, {
+    body: input,
+    method: "PATCH",
+    token,
+  });
+}
+
+export function loadDriverMap(token: string) {
+  return request<{ drivers: DriverMapEntry[] }>("/v1/admin/drivers/map", { token });
+}
+
+export function loadDriverRoutes(token: string) {
+  return request<{ routes: DriverRoute[] }>("/v1/admin/drivers/routes", { token });
+}
+
+export function createIsochrone(token: string, input: {
+  origin: { address?: string; lat?: number; lng?: number };
+  speedMph?: number;
+  travelMinutes: number;
+}) {
+  return request<{ plot: IsochronePlot }>("/v1/admin/isochrones", {
+    body: input,
+    method: "POST",
+    token,
+  });
+}
+
+export async function loadOrders(token: string) {
+  const payload = await request<Record<string, unknown>>("/v1/admin/orders?limit=25&order=-created_at", { token });
+  const orders = readOrderArray(payload);
+  return { orders, raw: payload };
+}
+
+export function loadOrderDetail(token: string, orderId: string) {
+  return request<Record<string, unknown>>(`/v1/admin/orders/${encodeURIComponent(orderId)}`, { token });
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    body: options.body ? JSON.stringify(options.body) : undefined,
+    headers: {
+      accept: "application/json",
+      ...(options.body ? { "content-type": "application/json" } : {}),
+      ...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
+    },
+    method: options.method || "GET",
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : {};
+
+  if (!response.ok) {
+    throw new Error(readErrorMessage(payload, response.status));
+  }
+
+  return payload as T;
+}
+
+function readErrorMessage(payload: unknown, status: number) {
+  if (typeof payload === "object" && payload && "message" in payload && typeof payload.message === "string") {
+    return payload.message;
+  }
+
+  return `BayBlaze API request failed with HTTP ${status}.`;
+}
+
+function readOrderArray(payload: Record<string, unknown>): MedusaOrder[] {
+  if (Array.isArray(payload.orders)) return payload.orders as MedusaOrder[];
+  if (Array.isArray(payload.data)) return payload.data as MedusaOrder[];
+  if (Array.isArray(payload.items)) return payload.items as MedusaOrder[];
+  return [];
+}

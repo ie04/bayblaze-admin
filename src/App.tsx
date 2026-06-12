@@ -1,0 +1,680 @@
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  Check,
+  CircleOff,
+  ClipboardList,
+  LogOut,
+  Map,
+  MapPinned,
+  Navigation,
+  RefreshCw,
+  Route,
+  Search,
+  ShieldCheck,
+  Truck,
+  UserCog,
+} from "lucide-react";
+
+import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader, Textarea } from "./components/ui";
+import {
+  createIsochrone,
+  loadDriverMap,
+  loadDriverRoutes,
+  loadOrderDetail,
+  loadOrders,
+  loadStoredSession,
+  login,
+  searchAccounts,
+  storeSession,
+  updateAccount,
+} from "./lib/adminApi";
+import type { Account, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, LatLng, MedusaOrder, Session } from "./lib/types";
+import { cx } from "./lib/classes";
+
+type View = "accounts" | "drivers" | "routes" | "coverage" | "orders";
+
+const views: Array<{ id: View; icon: ReactNode; label: string }> = [
+  { id: "accounts", icon: <UserCog size={18} aria-hidden="true" />, label: "Accounts" },
+  { id: "drivers", icon: <MapPinned size={18} aria-hidden="true" />, label: "Drivers" },
+  { id: "routes", icon: <Route size={18} aria-hidden="true" />, label: "Routes" },
+  { id: "coverage", icon: <Navigation size={18} aria-hidden="true" />, label: "Coverage" },
+  { id: "orders", icon: <ClipboardList size={18} aria-hidden="true" />, label: "Orders" },
+];
+
+const roleOptions: AccountRole[] = ["admin", "driver", "inventory"];
+
+function App() {
+  const [session, setSession] = useState<Session | null>(() => loadStoredSession());
+  const [activeView, setActiveView] = useState<View>("accounts");
+
+  function applySession(nextSession: Session | null) {
+    setSession(nextSession);
+    storeSession(nextSession);
+  }
+
+  if (!session) {
+    return <LoginScreen onLogin={applySession} />;
+  }
+
+  return (
+    <main className="min-h-svh">
+      <header className="sticky top-0 z-30 border-b border-[var(--bb-line)] bg-white/95 px-4 py-3 backdrop-blur md:px-6">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-[18px] bg-[var(--bb-charcoal)] text-[var(--bb-blaze)]">
+              <ShieldCheck size={23} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase text-[var(--bb-blaze)]">BayBlaze</p>
+              <h1 className="truncate text-2xl font-black uppercase leading-tight">Admin</h1>
+            </div>
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            <Badge tone="success">Admin</Badge>
+            <Button aria-label="Sign out" size="icon" variant="secondary" onClick={() => applySession(null)}>
+              <LogOut size={18} aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto grid max-w-7xl gap-4 px-3 py-4 md:grid-cols-[190px_minmax(0,1fr)] md:px-6 md:py-6">
+        <aside className="hidden md:block">
+          <nav className="sticky top-24 space-y-2" aria-label="Admin sections">
+            {views.map((item) => (
+              <button
+                key={item.id}
+                className={cx(
+                  "flex min-h-12 w-full items-center gap-3 rounded-2xl px-4 text-left text-sm font-black transition",
+                  activeView === item.id
+                    ? "bg-white text-[var(--bb-charcoal)] shadow-[var(--bb-shadow-soft)]"
+                    : "text-[var(--bb-muted)] hover:bg-white/70",
+                )}
+                onClick={() => setActiveView(item.id)}
+                type="button"
+              >
+                {item.icon}
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        <section className="min-w-0 pb-24">
+          {activeView === "accounts" ? <AccountsView token={session.token} /> : null}
+          {activeView === "drivers" ? <DriversView token={session.token} /> : null}
+          {activeView === "routes" ? <RoutesView token={session.token} /> : null}
+          {activeView === "coverage" ? <CoverageView token={session.token} /> : null}
+          {activeView === "orders" ? <OrdersView token={session.token} /> : null}
+        </section>
+      </div>
+
+      <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--bb-line)] bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(17,24,39,0.08)] backdrop-blur md:hidden">
+        <nav className="grid grid-cols-5 gap-1" aria-label="Admin navigation">
+          {views.map((item) => (
+            <button
+              key={item.id}
+              aria-label={item.label}
+              className={cx(
+                "grid min-h-13 place-items-center gap-1 rounded-2xl px-1 py-1.5 text-[10px] font-black transition",
+                activeView === item.id
+                  ? "bg-[var(--bb-blaze-soft)] text-[var(--bb-charcoal)] shadow-[var(--bb-shadow-soft)]"
+                  : "text-[var(--bb-muted)]",
+              )}
+              onClick={() => setActiveView(item.id)}
+              type="button"
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      </footer>
+    </main>
+  );
+}
+
+function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      onLogin(await login(email, password));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Sign-in failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="grid min-h-svh place-items-center px-4 py-8">
+      <form className="w-full max-w-md space-y-4" onSubmit={(event) => void submit(event)}>
+        <div className="flex items-center gap-3">
+          <span className="grid size-12 place-items-center rounded-[20px] bg-[var(--bb-charcoal)] text-[var(--bb-blaze)]">
+            <ShieldCheck size={26} aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-xs font-black uppercase text-[var(--bb-blaze)]">BayBlaze</p>
+            <h1 className="text-3xl font-black uppercase leading-tight">Admin</h1>
+          </div>
+        </div>
+        {error ? <ErrorState>{error}</ErrorState> : null}
+        <Card elevated className="space-y-4">
+          <Input autoComplete="email" label="Email" onChange={(event) => setEmail(event.target.value)} type="email" value={email} />
+          <Input autoComplete="current-password" label="Password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} />
+          <Button fullWidth loading={loading} type="submit">
+            Sign in
+          </Button>
+        </Card>
+      </form>
+    </main>
+  );
+}
+
+function AccountsView({ token }: { token: string }) {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busyUid, setBusyUid] = useState("");
+  const [error, setError] = useState("");
+
+  const refresh = useCallback(async (search = query) => {
+    setError("");
+    setLoading(true);
+    try {
+      setAccounts((await searchAccounts(token, search)).accounts);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Account search failed.");
+    } finally {
+      setLoading(false);
+    }
+  }, [query, token]);
+
+  async function patchAccount(account: Account, input: Parameters<typeof updateAccount>[2]) {
+    setError("");
+    setBusyUid(account.uid);
+    try {
+      const updated = (await updateAccount(token, account.uid, input)).account;
+      setAccounts((items) => items.map((item) => (item.uid === updated.uid ? updated : item)));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Account update failed.");
+    } finally {
+      setBusyUid("");
+    }
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refresh(""), 0);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        actions={
+          <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); void refresh(query); }}>
+            <Input aria-label="Search accounts" icon={<Search size={18} aria-hidden="true" />} onChange={(event) => setQuery(event.target.value)} placeholder="Search email or UID" value={query} />
+            <Button aria-label="Search" size="icon" type="submit" variant="secondary">
+              <Search size={18} aria-hidden="true" />
+            </Button>
+          </form>
+        }
+        eyebrow="Access"
+        icon={<UserCog size={22} aria-hidden="true" />}
+        title="Accounts"
+        subtitle="Search Firebase-backed BayBlaze accounts and manage app roles."
+      />
+      {error ? <ErrorState>{error}</ErrorState> : null}
+      {loading ? <LoadingState label="Loading accounts" /> : null}
+      {!loading && accounts.length === 0 ? <EmptyState>No matching accounts.</EmptyState> : null}
+      <div className="grid gap-3 lg:grid-cols-2">
+        {accounts.map((account) => (
+          <Card key={account.uid} className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="truncate text-lg font-black">{account.displayName || account.email}</h3>
+                <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{account.email}</p>
+                <p className="mt-1 truncate text-xs font-bold text-[var(--bb-muted)]">{account.uid}</p>
+              </div>
+              <Badge tone={account.disabled ? "danger" : "success"}>{account.disabled ? "Disabled" : "Active"}</Badge>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {roleOptions.map((role) => {
+                const active = account.roles.includes(role);
+                return (
+                  <Button
+                    key={role}
+                    loading={busyUid === account.uid}
+                    onClick={() => {
+                      const roles = active ? account.roles.filter((item) => item !== role) : [...account.roles, role];
+                      void patchAccount(account, { roles });
+                    }}
+                    size="sm"
+                    variant={active ? "primary" : "secondary"}
+                  >
+                    {active ? <Check size={15} aria-hidden="true" /> : null}
+                    {role}
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                loading={busyUid === account.uid}
+                onClick={() => void patchAccount(account, { settings: { ageVerificationDisabled: !account.settings.ageVerificationDisabled } })}
+                variant={account.settings.ageVerificationDisabled ? "danger" : "quiet"}
+              >
+                <CircleOff size={16} aria-hidden="true" />
+                Age check {account.settings.ageVerificationDisabled ? "off" : "on"}
+              </Button>
+              <Button
+                loading={busyUid === account.uid}
+                onClick={() => void patchAccount(account, { disabled: !account.disabled })}
+                variant={account.disabled ? "secondary" : "danger"}
+              >
+                {account.disabled ? "Enable" : "Disable"}
+              </Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DriversView({ token }: { token: string }) {
+  const [drivers, setDrivers] = useState<DriverMapEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const refresh = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      setDrivers((await loadDriverMap(token)).drivers);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Driver map failed.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        actions={<Button loading={loading} onClick={() => void refresh()} variant="secondary"><RefreshCw size={18} aria-hidden="true" />Refresh</Button>}
+        eyebrow="Live ops"
+        icon={<MapPinned size={22} aria-hidden="true" />}
+        title="Driver Map"
+        subtitle="Clock, vehicle, queue, and location state from BayBlaze API."
+      />
+      {error ? <ErrorState>{error}</ErrorState> : null}
+      {loading ? <LoadingState label="Loading drivers" /> : <DriverMap drivers={drivers} />}
+      <div className="grid gap-3 lg:grid-cols-3">
+        {drivers.map((driver) => (
+          <Card key={driver.uid} className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="truncate text-lg font-black">{driver.displayName}</h3>
+                <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{driver.email}</p>
+              </div>
+              <Badge tone={driver.clockedIn ? "success" : "neutral"}>{driver.clockedIn ? "Clocked in" : "Offline"}</Badge>
+            </div>
+            <Metric label="Vehicle" value={driver.activeVehicle?.label || "None"} />
+            <Metric label="Stops" value={String(driver.queue?.stopCount ?? 0)} />
+            <Metric label="Location" value={driver.location ? `${driver.location.lat.toFixed(4)}, ${driver.location.lng.toFixed(4)}` : "No fix"} />
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RoutesView({ token }: { token: string }) {
+  const [routes, setRoutes] = useState<DriverRoute[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const refresh = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      setRoutes((await loadDriverRoutes(token)).routes);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Driver routes failed.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        actions={<Button loading={loading} onClick={() => void refresh()} variant="secondary"><RefreshCw size={18} aria-hidden="true" />Refresh</Button>}
+        eyebrow="Dispatch"
+        icon={<Route size={22} aria-hidden="true" />}
+        title="Driver Routes"
+        subtitle="Queue order and route geometry resolved by the API."
+      />
+      {error ? <ErrorState>{error}</ErrorState> : null}
+      {loading ? <LoadingState label="Loading routes" /> : null}
+      {!loading && routes.length === 0 ? <EmptyState>No driver queues are available.</EmptyState> : null}
+      <div className="grid gap-4 xl:grid-cols-2">
+        {routes.map((route) => (
+          <Card key={route.uid} className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black">Driver {route.uid.slice(0, 8)}</h3>
+                <p className="text-sm font-semibold text-[var(--bb-muted)]">{route.stops.length} stops</p>
+              </div>
+              <Badge tone="info">{route.activeOrderId || "No active order"}</Badge>
+            </div>
+            <RoutePlot points={route.stops.map((stop) => stop.position).filter(Boolean) as LatLng[]} />
+            <div className="space-y-2">
+              {route.stops.map((stop) => (
+                <div key={`${route.uid}-${stop.orderId}`} className="rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-black">#{stop.index + 1} {stop.orderReference || stop.orderId}</p>
+                    <Badge tone={stop.locked ? "warning" : "neutral"}>{stop.status}</Badge>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-[var(--bb-muted)]">{stop.customerName}</p>
+                  <p className="text-sm font-semibold text-[var(--bb-muted)]">{stop.customerAddress}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CoverageView({ token }: { token: string }) {
+  const [address, setAddress] = useState("13702 42nd St Tampa, FL, 33613");
+  const [travelMinutes, setTravelMinutes] = useState(35);
+  const [speedMph, setSpeedMph] = useState(30);
+  const [plot, setPlot] = useState<IsochronePlot | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      setPlot((await createIsochrone(token, { origin: { address }, speedMph, travelMinutes })).plot);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Isochrone plot failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <PageHeader eyebrow="Coverage" icon={<Navigation size={22} aria-hidden="true" />} title="Isochrone Plot" subtitle="Create an API-generated delivery coverage polygon." />
+      {error ? <ErrorState>{error}</ErrorState> : null}
+      <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_150px_auto]" onSubmit={(event) => void submit(event)}>
+        <Input label="Origin" onChange={(event) => setAddress(event.target.value)} value={address} />
+        <Input label="Minutes" min={1} onChange={(event) => setTravelMinutes(Number(event.target.value))} type="number" value={travelMinutes} />
+        <Input label="Speed mph" min={5} onChange={(event) => setSpeedMph(Number(event.target.value))} type="number" value={speedMph} />
+        <div className="flex items-end">
+          <Button fullWidth loading={loading} type="submit">Plot</Button>
+        </div>
+      </form>
+      {plot ? (
+        <Card className="space-y-4">
+          <IsochronePlotView plot={plot} />
+          <div className="grid gap-3 md:grid-cols-4">
+            <Metric label="Minutes" value={String(plot.travelMinutes)} />
+            <Metric label="Speed" value={`${plot.speedMph} mph`} />
+            <Metric label="Radius" value={`${Math.round(plot.radiusMeters / 1609.344)} mi`} />
+            <Metric label="Method" value={plot.method.replaceAll("_", " ")} />
+          </div>
+        </Card>
+      ) : (
+        <EmptyState title="No plot yet">Enter an origin and travel target.</EmptyState>
+      )}
+    </div>
+  );
+}
+
+function OrdersView({ token }: { token: string }) {
+  const [orders, setOrders] = useState<MedusaOrder[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const refresh = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      setOrders((await loadOrders(token)).orders);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Orders failed.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  async function openOrder(order: MedusaOrder) {
+    const orderId = String(order.id || "");
+    if (!orderId) return;
+
+    setDetailLoading(true);
+    setError("");
+    try {
+      setSelectedOrder(await loadOrderDetail(token, orderId));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Order detail failed.");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const initialTimer = window.setTimeout(() => void refresh(), 0);
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
+  }, [refresh]);
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        actions={<Button loading={loading} onClick={() => void refresh()} variant="secondary"><RefreshCw size={18} aria-hidden="true" />Refresh</Button>}
+        eyebrow="Commerce"
+        icon={<ClipboardList size={22} aria-hidden="true" />}
+        title="Live Orders"
+        subtitle="Newest Medusa orders and details through BayBlaze API."
+      />
+      {error ? <ErrorState>{error}</ErrorState> : null}
+      {loading ? <LoadingState label="Loading orders" /> : null}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="grid gap-3">
+          {!loading && orders.length === 0 ? <EmptyState>No orders returned.</EmptyState> : null}
+          {orders.map((order, index) => (
+            <Card key={String(order.id || index)} className="cursor-pointer transition hover:border-[var(--bb-blaze)]" onClick={() => void openOrder(order)}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="truncate text-lg font-black">{readOrderLabel(order)}</h3>
+                  <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{order.email || "No customer email"}</p>
+                </div>
+                <Badge tone="info">{formatMoney(order.total, order.currency_code)}</Badge>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <Metric label="Payment" value={String(order.payment_status || "unknown")} />
+                <Metric label="Fulfillment" value={String(order.fulfillment_status || "unknown")} />
+                <Metric label="Created" value={formatDate(order.created_at)} />
+              </div>
+            </Card>
+          ))}
+        </div>
+        <Card className="h-fit space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-black">Order Details</h3>
+            {detailLoading ? <RefreshCw className="size-5 animate-spin text-[var(--bb-muted)]" aria-hidden="true" /> : null}
+          </div>
+          {selectedOrder ? (
+            <Textarea readOnly className="font-mono text-xs" value={JSON.stringify(selectedOrder, null, 2)} />
+          ) : (
+            <EmptyState title="Select an order">Details load from the API.</EmptyState>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--bb-line)] bg-white px-3 py-2">
+      <p className="text-[11px] font-black uppercase text-[var(--bb-muted)]">{label}</p>
+      <p className="mt-0.5 truncate text-sm font-black">{value}</p>
+    </div>
+  );
+}
+
+function DriverMap({ drivers }: { drivers: DriverMapEntry[] }) {
+  const positioned = drivers.filter((driver) => driver.location) as Array<DriverMapEntry & { location: LatLng }>;
+
+  if (positioned.length === 0) {
+    return <EmptyState title="No live locations">Clocked-in driver locations will appear here.</EmptyState>;
+  }
+
+  const bounds = getBounds(positioned.map((driver) => driver.location));
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="relative min-h-[360px] bg-[linear-gradient(90deg,rgba(227,224,218,0.7)_1px,transparent_1px),linear-gradient(rgba(227,224,218,0.7)_1px,transparent_1px)] bg-[size:36px_36px]">
+        <div className="absolute left-4 top-4 flex items-center gap-2 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
+          <Map size={16} aria-hidden="true" />
+          {positioned.length} live
+        </div>
+        {positioned.map((driver) => {
+          const point = project(driver.location, bounds);
+          return (
+            <div
+              key={driver.uid}
+              className="absolute -translate-x-1/2 -translate-y-1/2"
+              style={{ left: `${point.x}%`, top: `${point.y}%` }}
+            >
+              <div className="grid size-12 place-items-center rounded-full border-4 border-white bg-[var(--bb-success)] text-white shadow-[0_10px_24px_rgba(17,17,17,0.22)]">
+                <Truck size={20} aria-hidden="true" />
+              </div>
+              <div className="mt-1 whitespace-nowrap rounded-full bg-white px-2 py-1 text-xs font-black shadow-[var(--bb-shadow-soft)]">
+                {driver.displayName}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function RoutePlot({ points }: { points: LatLng[] }) {
+  if (points.length === 0) {
+    return <EmptyState title="No geocoded stops">The API could not resolve route geometry.</EmptyState>;
+  }
+
+  const bounds = getBounds(points);
+  const projected = points.map((point) => project(point, bounds));
+
+  return (
+    <svg className="h-72 w-full rounded-[20px] border border-[var(--bb-line)] bg-[var(--bb-surface-warm)]" viewBox="0 0 100 100" role="img" aria-label="Driver route plot">
+      <polyline points={projected.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke="#f26a1b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {projected.map((point, index) => (
+        <g key={`${point.x}-${point.y}-${index}`}>
+          <circle cx={point.x} cy={point.y} r="4" fill={index === 0 ? "#2f8f46" : "#111111"} stroke="#fff" strokeWidth="1.5" />
+          <text x={point.x + 5} y={point.y + 1} fontSize="4" fontWeight="800" fill="#111111">{index + 1}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function IsochronePlotView({ plot }: { plot: IsochronePlot }) {
+  const bounds = getBounds([plot.center, ...plot.polygon]);
+  const points = plot.polygon.map((point) => project(point, bounds));
+  const center = project(plot.center, bounds);
+
+  return (
+    <svg className="h-[420px] w-full rounded-[20px] border border-[var(--bb-line)] bg-[var(--bb-surface-warm)]" viewBox="0 0 100 100" role="img" aria-label="Isochrone plot">
+      <polygon points={points.map((point) => `${point.x},${point.y}`).join(" ")} fill="rgba(242,106,27,0.24)" stroke="#f26a1b" strokeWidth="1.5" />
+      <circle cx={center.x} cy={center.y} r="3.8" fill="#111111" stroke="#fff" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+function getBounds(points: LatLng[]) {
+  const lats = points.map((point) => point.lat);
+  const lngs = points.map((point) => point.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latPadding = Math.max((maxLat - minLat) * 0.18, 0.01);
+  const lngPadding = Math.max((maxLng - minLng) * 0.18, 0.01);
+
+  return {
+    maxLat: maxLat + latPadding,
+    maxLng: maxLng + lngPadding,
+    minLat: minLat - latPadding,
+    minLng: minLng - lngPadding,
+  };
+}
+
+function project(point: LatLng, bounds: ReturnType<typeof getBounds>) {
+  const width = bounds.maxLng - bounds.minLng || 1;
+  const height = bounds.maxLat - bounds.minLat || 1;
+
+  return {
+    x: ((point.lng - bounds.minLng) / width) * 100,
+    y: (1 - (point.lat - bounds.minLat) / height) * 100,
+  };
+}
+
+function readOrderLabel(order: MedusaOrder) {
+  if (order.display_id) return `Order #${order.display_id}`;
+  if (order.id) return String(order.id);
+  return "Order";
+}
+
+function formatMoney(value: unknown, currency: unknown) {
+  if (typeof value !== "number") return "Total n/a";
+  return new Intl.NumberFormat("en-US", {
+    currency: typeof currency === "string" ? currency.toUpperCase() : "USD",
+    style: "currency",
+  }).format(value / 100);
+}
+
+function formatDate(value: unknown) {
+  if (typeof value !== "string") return "n/a";
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+export default App;
