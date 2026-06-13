@@ -56,25 +56,29 @@ GET   /v1/admin/orders
 GET   /v1/admin/orders/:orderId
 ```
 
-`/v1/admin/*` routes require a BayBlaze account session bearer token with the
-`admin` role.
+`/v1/admin/*` routes require a BayBlaze account session bearer token from an
+employee account with the `admin` role.
 
 ## Account Model
 
 BayBlaze accounts are Firebase Auth users with API-owned account records in
 Firestore collection `accounts/{uid}`. Account records expose:
 
+- `badges`: `customer` or `employee`.
 - `roles`: `admin`, `driver`, and/or `inventory`.
 - `settings.ageVerificationDisabled`: operator-controlled test switch for age
   verification bypass behavior in client flows that support it.
 - `disabled`: mirrored with Firebase Auth disabled state.
 
-Role grants and account settings must be changed through `bayblaze-api`; do not
+Customer accounts are storefront shoppers. Employee accounts can receive any
+combination of `driver`, `inventory`, and `admin` roles. Badge changes, role
+grants, and account settings must be changed through `bayblaze-api`; do not
 write account docs from the dashboard.
 
 ## Dashboard Features
 
-- Search accounts and grant/remove roles.
+- Search accounts, set customer/employee badges, and grant/remove employee
+  roles.
 - Disable/enable accounts.
 - Toggle account-level age verification bypass for testing.
 - View drivers on a Google Maps JavaScript map widget using API-provided live

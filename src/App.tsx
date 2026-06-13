@@ -26,7 +26,7 @@ import {
   storeSession,
   updateAccount,
 } from "./lib/adminApi";
-import type { Account, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, LatLng, MedusaOrder, Session } from "./lib/types";
+import type { Account, AccountBadge, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, LatLng, MedusaOrder, Session } from "./lib/types";
 import { cx } from "./lib/classes";
 import { hasGoogleMapsBrowserKey, loadGoogleMaps } from "./lib/googleMaps";
 
@@ -41,6 +41,7 @@ const views: Array<{ id: View; icon: ReactNode; label: string }> = [
 ];
 
 const roleOptions: AccountRole[] = ["admin", "driver", "inventory"];
+const badgeOptions: AccountBadge[] = ["customer", "employee"];
 
 function App() {
   const [session, setSession] = useState<Session | null>(() => loadStoredSession());
@@ -228,7 +229,7 @@ function AccountsView({ token }: { token: string }) {
         eyebrow="Access"
         icon={<UserCog size={22} aria-hidden="true" />}
         title="Accounts"
-        subtitle="Search Firebase-backed BayBlaze accounts and manage app roles."
+        subtitle="Search BayBlaze accounts, set customer or employee badges, and grant employee roles."
       />
       {error ? <ErrorState>{error}</ErrorState> : null}
       {loading ? <LoadingState label="Loading accounts" /> : null}
@@ -245,15 +246,38 @@ function AccountsView({ token }: { token: string }) {
               <Badge tone={account.disabled ? "danger" : "success"}>{account.disabled ? "Disabled" : "Active"}</Badge>
             </div>
             <div className="flex flex-wrap gap-2">
+              {badgeOptions.map((badge) => {
+                const active = account.badges.includes(badge);
+                return (
+                  <Button
+                    key={badge}
+                    loading={busyUid === account.uid}
+                    onClick={() => {
+                      const nextBadges: AccountBadge[] = [badge];
+                      const nextRoles = badge === "employee" ? account.roles : [];
+                      void patchAccount(account, { badges: nextBadges, roles: nextRoles });
+                    }}
+                    size="sm"
+                    variant={active ? "primary" : "secondary"}
+                  >
+                    {active ? <Check size={15} aria-hidden="true" /> : null}
+                    {badge}
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-2">
               {roleOptions.map((role) => {
                 const active = account.roles.includes(role);
+                const employee = account.badges.includes("employee");
                 return (
                   <Button
                     key={role}
+                    disabled={!employee}
                     loading={busyUid === account.uid}
                     onClick={() => {
                       const roles = active ? account.roles.filter((item) => item !== role) : [...account.roles, role];
-                      void patchAccount(account, { roles });
+                      void patchAccount(account, { badges: ["employee"], roles });
                     }}
                     size="sm"
                     variant={active ? "primary" : "secondary"}

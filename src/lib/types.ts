@@ -1,9 +1,11 @@
 export type AccountRole = "admin" | "driver" | "inventory";
+export type AccountBadge = "customer" | "employee";
 
 export type Account = {
   disabled: boolean;
   displayName: string;
   email: string;
+  badges: AccountBadge[];
   roles: AccountRole[];
   settings: {
     ageVerificationDisabled: boolean;

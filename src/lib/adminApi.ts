@@ -1,4 +1,4 @@
-import type { Account, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, MedusaOrder, Session } from "./types";
+import type { Account, AccountBadge, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, MedusaOrder, Session } from "./types";
 
 const apiBaseUrl = (import.meta.env.VITE_BAYBLAZE_API_URL || "https://api.bayblaze.net").replace(/\/$/, "");
 const sessionKey = "bayblaze_admin_session";
@@ -36,7 +36,7 @@ export async function login(email: string, password: string): Promise<Session> {
     method: "POST",
   });
 
-  if (!payload.account.roles.includes("admin")) {
+  if (!payload.account.badges.includes("employee") || !payload.account.roles.includes("admin")) {
     throw new Error("This account does not have admin access.");
   }
 
@@ -51,6 +51,7 @@ export function searchAccounts(token: string, query: string) {
 }
 
 export function updateAccount(token: string, uid: string, input: {
+  badges?: AccountBadge[];
   disabled?: boolean;
   roles?: AccountRole[];
   settings?: { ageVerificationDisabled?: boolean };
