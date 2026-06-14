@@ -30,18 +30,20 @@ import type { Account, AccountBadge, AccountRole, DriverMapEntry, DriverRoute, I
 import { cx } from "./lib/classes";
 import { hasGoogleMapsBrowserKey, loadGoogleMaps } from "./lib/googleMaps";
 
-type View = "accounts" | "drivers" | "routes" | "coverage" | "orders";
+type View = "accounts" | "drivers" | "routes" | "orders";
 
 const views: Array<{ id: View; icon: ReactNode; label: string }> = [
   { id: "accounts", icon: <UserCog size={18} aria-hidden="true" />, label: "Accounts" },
   { id: "drivers", icon: <MapPinned size={18} aria-hidden="true" />, label: "Drivers" },
   { id: "routes", icon: <Route size={18} aria-hidden="true" />, label: "Routes" },
-  { id: "coverage", icon: <Navigation size={18} aria-hidden="true" />, label: "Coverage" },
   { id: "orders", icon: <ClipboardList size={18} aria-hidden="true" />, label: "Orders" },
 ];
 
 const roleOptions: AccountRole[] = ["admin", "driver", "inventory"];
 const badgeOptions: AccountBadge[] = ["customer", "employee"];
+const warehouseAddress = "13702 42nd St Tampa, FL, 33613";
+const roundTripTravelMinutes = 30;
+const isochroneSpeedMph = 30;
 
 function App() {
   const [session, setSession] = useState<Session | null>(() => loadStoredSession());
@@ -104,13 +106,12 @@ function App() {
           {activeView === "accounts" ? <AccountsView token={session.token} /> : null}
           {activeView === "drivers" ? <DriversView token={session.token} /> : null}
           {activeView === "routes" ? <RoutesView token={session.token} /> : null}
-          {activeView === "coverage" ? <CoverageView token={session.token} /> : null}
           {activeView === "orders" ? <OrdersView token={session.token} /> : null}
         </section>
       </div>
 
       <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--bb-line)] bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(17,24,39,0.08)] backdrop-blur md:hidden">
-        <nav className="grid grid-cols-5 gap-1" aria-label="Admin navigation">
+        <nav className="grid grid-cols-4 gap-1" aria-label="Admin navigation">
           {views.map((item) => (
             <button
               key={item.id}
@@ -314,8 +315,12 @@ function AccountsView({ token }: { token: string }) {
 
 function DriversView({ token }: { token: string }) {
   const [drivers, setDrivers] = useState<DriverMapEntry[]>([]);
+  const [isochronePlot, setIsochronePlot] = useState<IsochronePlot | null>(null);
+  const [showIsochrone, setShowIsochrone] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [isochroneLoading, setIsochroneLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isochroneError, setIsochroneError] = useState("");
 
   const refresh = useCallback(async () => {
     setError("");
@@ -329,22 +334,64 @@ function DriversView({ token }: { token: string }) {
     }
   }, [token]);
 
+  const recalculateIsochrone = useCallback(async () => {
+    setIsochroneError("");
+    setIsochroneLoading(true);
+    try {
+      const payload = await createIsochrone(token, {
+        origin: { address: warehouseAddress },
+        speedMph: isochroneSpeedMph,
+        travelMinutes: roundTripTravelMinutes,
+      });
+      setIsochronePlot(payload.plot);
+      setShowIsochrone(true);
+    } catch (caught) {
+      setIsochroneError(caught instanceof Error ? caught.message : "Isochrone recalculation failed.");
+    } finally {
+      setIsochroneLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => void refresh(), 0);
+    const timer = window.setTimeout(() => {
+      void refresh();
+      void recalculateIsochrone();
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [refresh]);
+  }, [recalculateIsochrone, refresh]);
 
   return (
     <div className="space-y-4">
       <PageHeader
-        actions={<Button loading={loading} onClick={() => void refresh()} variant="secondary"><RefreshCw size={18} aria-hidden="true" />Refresh</Button>}
+        actions={
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
+              <input
+                checked={showIsochrone}
+                className="size-4 accent-[var(--bb-blaze)]"
+                onChange={(event) => setShowIsochrone(event.target.checked)}
+                type="checkbox"
+              />
+              Isochrone
+            </label>
+            <Button loading={isochroneLoading} onClick={() => void recalculateIsochrone()} variant="secondary">
+              <Navigation size={18} aria-hidden="true" />
+              Recalculate
+            </Button>
+            <Button loading={loading} onClick={() => void refresh()} variant="secondary">
+              <RefreshCw size={18} aria-hidden="true" />
+              Refresh
+            </Button>
+          </div>
+        }
         eyebrow="Live ops"
         icon={<MapPinned size={22} aria-hidden="true" />}
         title="Driver Map"
-        subtitle="Clock, vehicle, queue, and location state from BayBlaze API."
+        subtitle="Clock, vehicle, queue, location state, and the 1 hour round trip isochrone from BayBlaze API."
       />
       {error ? <ErrorState>{error}</ErrorState> : null}
-      {loading ? <LoadingState label="Loading drivers" /> : <DriverMap drivers={drivers} />}
+      {isochroneError ? <ErrorState>{isochroneError}</ErrorState> : null}
+      {loading ? <LoadingState label="Loading drivers" /> : <DriverMap drivers={drivers} isochronePlot={isochronePlot} showIsochrone={showIsochrone} />}
       <div className="grid gap-3 lg:grid-cols-3">
         {drivers.map((driver) => (
           <Card key={driver.uid} className="space-y-3">
@@ -425,56 +472,6 @@ function RoutesView({ token }: { token: string }) {
           </Card>
         ))}
       </div>
-    </div>
-  );
-}
-
-function CoverageView({ token }: { token: string }) {
-  const [address, setAddress] = useState("13702 42nd St Tampa, FL, 33613");
-  const [travelMinutes, setTravelMinutes] = useState(35);
-  const [speedMph, setSpeedMph] = useState(30);
-  const [plot, setPlot] = useState<IsochronePlot | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      setPlot((await createIsochrone(token, { origin: { address }, speedMph, travelMinutes })).plot);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Isochrone plot failed.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <PageHeader eyebrow="Coverage" icon={<Navigation size={22} aria-hidden="true" />} title="Isochrone Plot" subtitle="Create an API-generated delivery coverage polygon." />
-      {error ? <ErrorState>{error}</ErrorState> : null}
-      <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_150px_auto]" onSubmit={(event) => void submit(event)}>
-        <Input label="Origin" onChange={(event) => setAddress(event.target.value)} value={address} />
-        <Input label="Minutes" min={1} onChange={(event) => setTravelMinutes(Number(event.target.value))} type="number" value={travelMinutes} />
-        <Input label="Speed mph" min={5} onChange={(event) => setSpeedMph(Number(event.target.value))} type="number" value={speedMph} />
-        <div className="flex items-end">
-          <Button fullWidth loading={loading} type="submit">Plot</Button>
-        </div>
-      </form>
-      {plot ? (
-        <Card className="space-y-4">
-          <IsochronePlotView plot={plot} />
-          <div className="grid gap-3 md:grid-cols-4">
-            <Metric label="Minutes" value={String(plot.travelMinutes)} />
-            <Metric label="Speed" value={`${plot.speedMph} mph`} />
-            <Metric label="Radius" value={`${Math.round(plot.radiusMeters / 1609.344)} mi`} />
-            <Metric label="Method" value={plot.method.replaceAll("_", " ")} />
-          </div>
-        </Card>
-      ) : (
-        <EmptyState title="No plot yet">Enter an origin and travel target.</EmptyState>
-      )}
     </div>
   );
 }
@@ -578,16 +575,25 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DriverMap({ drivers }: { drivers: DriverMapEntry[] }) {
+function DriverMap({
+  drivers,
+  isochronePlot,
+  showIsochrone,
+}: {
+  drivers: DriverMapEntry[];
+  isochronePlot: IsochronePlot | null;
+  showIsochrone: boolean;
+}) {
   const mapRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
 
-    void renderGoogleDriverMap(node, drivers);
-  }, [drivers]);
+    void renderGoogleDriverMap(node, drivers, showIsochrone ? isochronePlot : null);
+  }, [drivers, isochronePlot, showIsochrone]);
   const positioned = drivers.filter((driver) => driver.location) as Array<DriverMapEntry & { location: LatLng }>;
+  const visibleIsochrone = showIsochrone ? isochronePlot : null;
 
-  if (positioned.length === 0) {
-    return <EmptyState title="No live locations">Clocked-in driver locations will appear here.</EmptyState>;
+  if (positioned.length === 0 && !visibleIsochrone) {
+    return <EmptyState title="No map geometry">Clocked-in driver locations and the isochrone polygon will appear here.</EmptyState>;
   }
 
   if (!hasGoogleMapsBrowserKey()) {
@@ -605,20 +611,28 @@ function DriverMap({ drivers }: { drivers: DriverMapEntry[] }) {
         <div className="pointer-events-none absolute left-4 top-4 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
           {positioned.length} live
         </div>
+        {visibleIsochrone ? (
+          <div className="pointer-events-none absolute bottom-4 left-4 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
+            {visibleIsochrone.travelMinutes * 2} min round trip
+          </div>
+        ) : null}
       </div>
     </Card>
   );
 }
 
-async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverMapEntry[]) {
+async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverMapEntry[], isochronePlot: IsochronePlot | null) {
   const maps = await loadGoogleMaps();
   const positioned = drivers.filter((driver) => driver.location) as Array<DriverMapEntry & { location: LatLng }>;
 
-  if (positioned.length === 0) {
+  if (positioned.length === 0 && !isochronePlot) {
     return;
   }
 
-  const center = averageLatLng(positioned.map((driver) => driver.location));
+  const center = averageLatLng([
+    ...positioned.map((driver) => driver.location),
+    ...(isochronePlot ? [isochronePlot.center] : []),
+  ]);
   const map = new maps.Map(container, {
     center,
     clickableIcons: false,
@@ -629,6 +643,37 @@ async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverM
   });
   const bounds = new maps.LatLngBounds();
   const infoWindow = new maps.InfoWindow();
+
+  if (isochronePlot) {
+    const polygonPath = isochronePlot.polygon.map((point) => ({ lat: point.lat, lng: point.lng }));
+    new maps.Polygon({
+      clickable: false,
+      fillColor: "#f26a1b",
+      fillOpacity: 0.16,
+      map,
+      paths: polygonPath,
+      strokeColor: "#c94d12",
+      strokeOpacity: 0.9,
+      strokeWeight: 2,
+    });
+    polygonPath.forEach((point) => bounds.extend(point));
+    bounds.extend({ lat: isochronePlot.center.lat, lng: isochronePlot.center.lng });
+
+    new maps.Marker({
+      icon: {
+        anchor: new maps.Point(8, 8),
+        path: maps.SymbolPath.CIRCLE,
+        fillColor: "#111111",
+        fillOpacity: 1,
+        scale: 6,
+        strokeColor: "#ffffff",
+        strokeWeight: 3,
+      },
+      map,
+      position: { lat: isochronePlot.center.lat, lng: isochronePlot.center.lng },
+      title: isochronePlot.center.address || "Isochrone origin",
+    });
+  }
 
   positioned.forEach((driver) => {
     const position = { lat: driver.location.lat, lng: driver.location.lng };
@@ -669,7 +714,7 @@ async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverM
     bounds.extend(position);
   });
 
-  if (positioned.length > 1) {
+  if (positioned.length > 1 || isochronePlot) {
     map.fitBounds(bounds, 72);
   }
 }
@@ -706,19 +751,6 @@ function RoutePlot({ points }: { points: LatLng[] }) {
           <text x={point.x + 5} y={point.y + 1} fontSize="4" fontWeight="800" fill="#111111">{index + 1}</text>
         </g>
       ))}
-    </svg>
-  );
-}
-
-function IsochronePlotView({ plot }: { plot: IsochronePlot }) {
-  const bounds = getBounds([plot.center, ...plot.polygon]);
-  const points = plot.polygon.map((point) => project(point, bounds));
-  const center = project(plot.center, bounds);
-
-  return (
-    <svg className="h-[420px] w-full rounded-[20px] border border-[var(--bb-line)] bg-[var(--bb-surface-warm)]" viewBox="0 0 100 100" role="img" aria-label="Isochrone plot">
-      <polygon points={points.map((point) => `${point.x},${point.y}`).join(" ")} fill="rgba(242,106,27,0.24)" stroke="#f26a1b" strokeWidth="1.5" />
-      <circle cx={center.x} cy={center.y} r="3.8" fill="#111111" stroke="#fff" strokeWidth="1.4" />
     </svg>
   );
 }

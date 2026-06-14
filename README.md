@@ -1,7 +1,7 @@
 # BayBlaze Admin
 
-Operator dashboard for BayBlaze accounts, drivers, routes, coverage plots, and
-live order details.
+Operator dashboard for BayBlaze accounts, drivers, route geometry, driver map
+isochrones, and live order details.
 
 ```bash
 npm install

@@ -83,13 +83,15 @@ write account docs from the dashboard.
 - Toggle account-level age verification bypass for testing.
 - View drivers on a Google Maps JavaScript map widget using API-provided live
   location snapshots.
+- Show or hide the API-generated 1 hour round trip isochrone polygon directly
+  on the Driver Map, and recalculate it from the Driver Map controls.
 - View driver delivery route stop geometry.
-- Create an API-generated isochrone/coverage plot.
 - View live Medusa orders and order details through `bayblaze-api`.
 
-The dashboard renders route and isochrone plots from API data. The live driver
-map is the one browser Google Maps integration and must use a restricted public
-browser key, never the server-side Google Maps key.
+The dashboard renders route plots from API data and draws the isochrone polygon
+inside the live driver Google Map. The live driver map is the one browser Google
+Maps integration and must use a restricted public browser key, never the
+server-side Google Maps key.
 
 ## Deployment Assumptions
 
