@@ -42,7 +42,7 @@ const views: Array<{ id: View; icon: ReactNode; label: string }> = [
 const roleOptions: AccountRole[] = ["admin", "driver", "inventory"];
 const badgeOptions: AccountBadge[] = ["customer", "employee"];
 const warehouseAddress = "13702 42nd St Tampa, FL, 33613";
-const roundTripTravelMinutes = 30;
+const roundTripTravelMinutes = 60;
 const isochroneSpeedMph = 30;
 
 function App() {
@@ -334,11 +334,12 @@ function DriversView({ token }: { token: string }) {
     }
   }, [token]);
 
-  const recalculateIsochrone = useCallback(async () => {
+  const recalculateIsochrone = useCallback(async (force = false) => {
     setIsochroneError("");
     setIsochroneLoading(true);
     try {
       const payload = await createIsochrone(token, {
+        force,
         origin: { address: warehouseAddress },
         speedMph: isochroneSpeedMph,
         travelMinutes: roundTripTravelMinutes,
@@ -374,7 +375,7 @@ function DriversView({ token }: { token: string }) {
               />
               Isochrone
             </label>
-            <Button loading={isochroneLoading} onClick={() => void recalculateIsochrone()} variant="secondary">
+            <Button loading={isochroneLoading} onClick={() => void recalculateIsochrone(true)} variant="secondary">
               <Navigation size={18} aria-hidden="true" />
               Recalculate
             </Button>
@@ -613,7 +614,7 @@ function DriverMap({
         </div>
         {visibleIsochrone ? (
           <div className="pointer-events-none absolute bottom-4 left-4 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
-            {visibleIsochrone.travelMinutes * 2} min round trip
+            {visibleIsochrone.travelMinutes} min round trip
           </div>
         ) : null}
       </div>

@@ -72,6 +72,7 @@ export function loadDriverRoutes(token: string) {
 }
 
 export function createIsochrone(token: string, input: {
+  force?: boolean;
   origin: { address?: string; lat?: number; lng?: number };
   speedMph?: number;
   travelMinutes: number;
