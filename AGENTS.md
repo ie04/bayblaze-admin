@@ -83,8 +83,9 @@ write account docs from the dashboard.
 - Toggle account-level age verification bypass for testing.
 - View drivers on a Google Maps JavaScript map widget using API-provided live
   location snapshots.
-- Show or hide the API-generated 1 hour round trip isochrone polygon directly
-  on the Driver Map, and recalculate it from the Driver Map controls.
+- Show or hide the API-generated WH1 round-trip isochrone polygon directly on
+  the Driver Map, adjust the round-trip drive time in hours, and recalculate it
+  from the Driver Map controls.
 - View driver delivery route stop geometry.
 - View live Medusa orders and order details through `bayblaze-api`.
 
@@ -93,8 +94,10 @@ inside the live driver Google Map. The live driver map is the one browser Google
 Maps integration and must use a restricted public browser key, never the
 server-side Google Maps key.
 The Driver Map requests an adjustable round-trip isochrone from WH1 through
-`POST /v1/admin/isochrones`; normal slider-driven map loads may use API cache,
-while the Recalculate button sends `force: true`.
+`POST /v1/admin/isochrones`; the slider uses 15-minute increments, the number
+input accepts arbitrary hour increments up to 3 hours round trip, normal
+slider-driven map loads may use API cache, and the Recalculate button sends
+`force: true`.
 
 ## Deployment Assumptions
 

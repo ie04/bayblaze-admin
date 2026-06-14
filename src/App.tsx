@@ -42,9 +42,9 @@ const views: Array<{ id: View; icon: ReactNode; label: string }> = [
 const roleOptions: AccountRole[] = ["admin", "driver", "inventory"];
 const badgeOptions: AccountBadge[] = ["customer", "employee"];
 const warehouseAddress = "13702 42nd St Tampa, FL, 33613";
-const defaultRoundTripTravelMinutes = 60;
-const minRoundTripTravelMinutes = 30;
-const maxRoundTripTravelMinutes = 120;
+const defaultRoundTripHours = 1;
+const minRoundTripHours = 0.25;
+const maxRoundTripHours = 3;
 const isochroneSpeedMph = 30;
 
 function App() {
@@ -318,12 +318,18 @@ function AccountsView({ token }: { token: string }) {
 function DriversView({ token }: { token: string }) {
   const [drivers, setDrivers] = useState<DriverMapEntry[]>([]);
   const [isochronePlot, setIsochronePlot] = useState<IsochronePlot | null>(null);
-  const [isochroneTravelMinutes, setIsochroneTravelMinutes] = useState(defaultRoundTripTravelMinutes);
+  const [isochroneHoursInput, setIsochroneHoursInput] = useState(String(defaultRoundTripHours));
   const [showIsochrone, setShowIsochrone] = useState(true);
   const [loading, setLoading] = useState(true);
   const [isochroneLoading, setIsochroneLoading] = useState(false);
   const [error, setError] = useState("");
   const [isochroneError, setIsochroneError] = useState("");
+  const parsedIsochroneHours = Number(isochroneHoursInput);
+  const hasValidIsochroneHours = Number.isFinite(parsedIsochroneHours) && parsedIsochroneHours > 0;
+  const isochroneHours = hasValidIsochroneHours
+    ? clampNumber(parsedIsochroneHours, minRoundTripHours, maxRoundTripHours)
+    : defaultRoundTripHours;
+  const isochroneTravelMinutes = Math.round(isochroneHours * 60);
 
   const refresh = useCallback(async () => {
     setError("");
@@ -339,6 +345,10 @@ function DriversView({ token }: { token: string }) {
 
   const recalculateIsochrone = useCallback(async (force = false) => {
     setIsochroneError("");
+    if (!hasValidIsochroneHours) {
+      return;
+    }
+
     setIsochroneLoading(true);
     try {
       const payload = await createIsochrone(token, {
@@ -354,7 +364,7 @@ function DriversView({ token }: { token: string }) {
     } finally {
       setIsochroneLoading(false);
     }
-  }, [isochroneTravelMinutes, token]);
+  }, [hasValidIsochroneHours, isochroneTravelMinutes, token]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -384,23 +394,35 @@ function DriversView({ token }: { token: string }) {
               />
               Isochrone
             </label>
-            <label className="flex min-h-12 min-w-64 items-center gap-3 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
-              <span className="shrink-0">Radius</span>
+            <label className="flex min-h-12 min-w-72 items-center gap-3 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
+              <span className="shrink-0">Round trip</span>
               <input
-                aria-label="Isochrone radius"
+                aria-label="Isochrone round trip hours"
                 className="min-w-0 flex-1 accent-[var(--bb-blaze)]"
-                max={maxRoundTripTravelMinutes}
-                min={minRoundTripTravelMinutes}
-                onChange={(event) => setIsochroneTravelMinutes(Number(event.target.value))}
-                step={5}
+                max={maxRoundTripHours}
+                min={minRoundTripHours}
+                onChange={(event) => setIsochroneHoursInput(event.target.value)}
+                step={0.25}
                 type="range"
-                value={isochroneTravelMinutes}
+                value={isochroneHours}
               />
-              <span className="w-24 shrink-0 text-right text-xs uppercase text-[var(--bb-muted)]">
-                {radiusMiles === null ? `${isochroneTravelMinutes} min` : `${radiusMiles} mi`}
+              <input
+                aria-label="Isochrone round trip hours value"
+                className="h-9 w-18 rounded-xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-2 text-right text-sm font-black outline-none focus:border-[var(--bb-blaze)]"
+                max={maxRoundTripHours}
+                min={minRoundTripHours}
+                onBlur={() => setIsochroneHoursInput(formatHours(isochroneHours))}
+                onChange={(event) => setIsochroneHoursInput(event.target.value)}
+                step="any"
+                type="number"
+                value={isochroneHoursInput}
+              />
+              <span className="shrink-0 text-xs uppercase text-[var(--bb-muted)]">hr</span>
+              <span className="w-16 shrink-0 text-right text-xs uppercase text-[var(--bb-muted)]">
+                {radiusMiles === null ? `${isochroneTravelMinutes} min` : `~${radiusMiles} mi`}
               </span>
             </label>
-            <Button loading={isochroneLoading} onClick={() => void recalculateIsochrone(true)} variant="secondary">
+            <Button disabled={!hasValidIsochroneHours} loading={isochroneLoading} onClick={() => void recalculateIsochrone(true)} variant="secondary">
               <Navigation size={18} aria-hidden="true" />
               Recalculate
             </Button>
@@ -821,6 +843,14 @@ function formatMoney(value: unknown, currency: unknown) {
     currency: typeof currency === "string" ? currency.toUpperCase() : "USD",
     style: "currency",
   }).format(value / 100);
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function formatHours(value: number) {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
 }
 
 function formatDate(value: unknown) {
