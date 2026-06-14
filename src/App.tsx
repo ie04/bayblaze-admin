@@ -42,7 +42,9 @@ const views: Array<{ id: View; icon: ReactNode; label: string }> = [
 const roleOptions: AccountRole[] = ["admin", "driver", "inventory"];
 const badgeOptions: AccountBadge[] = ["customer", "employee"];
 const warehouseAddress = "13702 42nd St Tampa, FL, 33613";
-const roundTripTravelMinutes = 60;
+const defaultRoundTripTravelMinutes = 60;
+const minRoundTripTravelMinutes = 30;
+const maxRoundTripTravelMinutes = 120;
 const isochroneSpeedMph = 30;
 
 function App() {
@@ -316,6 +318,7 @@ function AccountsView({ token }: { token: string }) {
 function DriversView({ token }: { token: string }) {
   const [drivers, setDrivers] = useState<DriverMapEntry[]>([]);
   const [isochronePlot, setIsochronePlot] = useState<IsochronePlot | null>(null);
+  const [isochroneTravelMinutes, setIsochroneTravelMinutes] = useState(defaultRoundTripTravelMinutes);
   const [showIsochrone, setShowIsochrone] = useState(true);
   const [loading, setLoading] = useState(true);
   const [isochroneLoading, setIsochroneLoading] = useState(false);
@@ -342,7 +345,7 @@ function DriversView({ token }: { token: string }) {
         force,
         origin: { address: warehouseAddress },
         speedMph: isochroneSpeedMph,
-        travelMinutes: roundTripTravelMinutes,
+        travelMinutes: isochroneTravelMinutes,
       });
       setIsochronePlot(payload.plot);
       setShowIsochrone(true);
@@ -351,15 +354,21 @@ function DriversView({ token }: { token: string }) {
     } finally {
       setIsochroneLoading(false);
     }
-  }, [token]);
+  }, [isochroneTravelMinutes, token]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void refresh();
-      void recalculateIsochrone();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [recalculateIsochrone, refresh]);
+  }, [refresh]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void recalculateIsochrone(), 600);
+    return () => window.clearTimeout(timer);
+  }, [recalculateIsochrone]);
+
+  const radiusMiles = isochronePlot ? Math.round(isochronePlot.radiusMeters / 1609.344) : null;
 
   return (
     <div className="space-y-4">
@@ -375,6 +384,22 @@ function DriversView({ token }: { token: string }) {
               />
               Isochrone
             </label>
+            <label className="flex min-h-12 min-w-64 items-center gap-3 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
+              <span className="shrink-0">Radius</span>
+              <input
+                aria-label="Isochrone radius"
+                className="min-w-0 flex-1 accent-[var(--bb-blaze)]"
+                max={maxRoundTripTravelMinutes}
+                min={minRoundTripTravelMinutes}
+                onChange={(event) => setIsochroneTravelMinutes(Number(event.target.value))}
+                step={5}
+                type="range"
+                value={isochroneTravelMinutes}
+              />
+              <span className="w-24 shrink-0 text-right text-xs uppercase text-[var(--bb-muted)]">
+                {radiusMiles === null ? `${isochroneTravelMinutes} min` : `${radiusMiles} mi`}
+              </span>
+            </label>
             <Button loading={isochroneLoading} onClick={() => void recalculateIsochrone(true)} variant="secondary">
               <Navigation size={18} aria-hidden="true" />
               Recalculate
@@ -388,7 +413,7 @@ function DriversView({ token }: { token: string }) {
         eyebrow="Live ops"
         icon={<MapPinned size={22} aria-hidden="true" />}
         title="Driver Map"
-        subtitle="Clock, vehicle, queue, location state, and the 1 hour round trip isochrone from BayBlaze API."
+        subtitle="Clock, vehicle, queue, location state, and the adjustable WH1 round trip isochrone from BayBlaze API."
       />
       {error ? <ErrorState>{error}</ErrorState> : null}
       {isochroneError ? <ErrorState>{isochroneError}</ErrorState> : null}

@@ -92,9 +92,9 @@ The dashboard renders route plots from API data and draws the isochrone polygon
 inside the live driver Google Map. The live driver map is the one browser Google
 Maps integration and must use a restricted public browser key, never the
 server-side Google Maps key.
-The Driver Map requests a 60-minute round-trip isochrone from WH1 through
-`POST /v1/admin/isochrones`; normal map loads may use API cache, while the
-Recalculate button sends `force: true`.
+The Driver Map requests an adjustable round-trip isochrone from WH1 through
+`POST /v1/admin/isochrones`; normal slider-driven map loads may use API cache,
+while the Recalculate button sends `force: true`.
 
 ## Deployment Assumptions
 
