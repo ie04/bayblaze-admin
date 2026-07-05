@@ -15,7 +15,7 @@ import {
   UserCog,
 } from "lucide-react";
 
-import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader, Textarea } from "./components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader } from "./components/ui";
 import {
   completeAdminGoogleLogin,
   createIsochrone,
@@ -302,7 +302,7 @@ function AccountsView({ token }: { token: string }) {
       <PageHeader
         actions={
           <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); void refresh(query); }}>
-            <Input aria-label="Search accounts" icon={<Search size={18} aria-hidden="true" />} onChange={(event) => setQuery(event.target.value)} placeholder="Search email or UID" value={query} />
+            <Input aria-label="Search accounts" icon={<Search size={18} aria-hidden="true" />} onChange={(event) => setQuery(event.target.value)} placeholder="Search email" value={query} />
             <Button aria-label="Search" size="icon" type="submit" variant="secondary">
               <Search size={18} aria-hidden="true" />
             </Button>
@@ -323,7 +323,6 @@ function AccountsView({ token }: { token: string }) {
               <div className="min-w-0">
                 <h3 className="truncate text-lg font-black">{account.displayName || account.email}</h3>
                 <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{account.email}</p>
-                <p className="mt-1 truncate text-xs font-bold text-[var(--bb-muted)]">{account.uid}</p>
               </div>
               <Badge tone={account.disabled ? "danger" : "success"}>{account.disabled ? "Disabled" : "Active"}</Badge>
             </div>
@@ -578,7 +577,7 @@ function RoutesView({ token }: { token: string }) {
           <Card key={route.uid} className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-black">Driver {route.uid.slice(0, 8)}</h3>
+                <h3 className="text-lg font-black">Driver route</h3>
                 <p className="text-sm font-semibold text-[var(--bb-muted)]">{route.stops.length} stops</p>
               </div>
               <Badge tone="info">{route.activeOrderId || "No active order"}</Badge>
@@ -683,12 +682,71 @@ function OrdersView({ token }: { token: string }) {
             {detailLoading ? <RefreshCw className="size-5 animate-spin text-[var(--bb-muted)]" aria-hidden="true" /> : null}
           </div>
           {selectedOrder ? (
-            <Textarea readOnly className="font-mono text-xs" value={JSON.stringify(selectedOrder, null, 2)} />
+            <OrderDetailSummary detail={selectedOrder} />
           ) : (
             <EmptyState title="Select an order">Details load from the API.</EmptyState>
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+function OrderDetailSummary({ detail }: { detail: Record<string, unknown> }) {
+  const order = readOrderDetail(detail);
+  const metadata = readRecord(order.metadata);
+  const shippingAddress = readRecord(order.shipping_address);
+  const items = readArray(order.items);
+  const deliveryStatus = readText(
+    metadata.bayblaze_delivery_status,
+    metadata.delivery_status,
+    metadata.driver_delivery_status,
+    "Not started",
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Metric label="Customer" value={readText(order.email, "No email")} />
+        <Metric label="Total" value={formatMoney(order.total, order.currency_code)} />
+        <Metric label="Payment" value={readText(order.payment_status, "unknown")} />
+        <Metric label="Fulfillment" value={readText(order.fulfillment_status, "unknown")} />
+        <Metric label="Delivery" value={deliveryStatus} />
+        <Metric label="Created" value={formatDate(order.created_at)} />
+      </div>
+
+      <section className="rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-3">
+        <p className="text-[11px] font-black uppercase text-[var(--bb-muted)]">Ship to</p>
+        <p className="mt-1 text-sm font-black text-[var(--bb-charcoal)]">
+          {formatRecipientName(shippingAddress, order.email)}
+        </p>
+        <p className="mt-1 whitespace-pre-line text-sm font-semibold leading-5 text-[var(--bb-muted)]">
+          {formatAddress(shippingAddress)}
+        </p>
+      </section>
+
+      <section className="space-y-2">
+        <p className="text-[11px] font-black uppercase text-[var(--bb-muted)]">Items</p>
+        {items.length === 0 ? (
+          <EmptyState title="No items">This order detail did not include line items.</EmptyState>
+        ) : (
+          items.map((item, index) => {
+            const record = readRecord(item);
+            const title = readText(record.product_title, record.title, "Product");
+            const variant = readText(record.variant_title, "Default");
+            const quantity = typeof record.quantity === "number" ? record.quantity : 1;
+
+            return (
+              <div key={`${title}-${variant}-${index}`} className="rounded-2xl border border-[var(--bb-line)] bg-white px-3 py-2">
+                <p className="font-black text-[var(--bb-charcoal)]">{title}</p>
+                <p className="text-sm font-semibold text-[var(--bb-muted)]">
+                  {variant} · Qty {quantity}
+                </p>
+              </div>
+            );
+          })
+        )}
+      </section>
     </div>
   );
 }
@@ -700,6 +758,62 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="mt-0.5 truncate text-sm font-black">{value}</p>
     </div>
   );
+}
+
+function readOrderDetail(detail: Record<string, unknown>) {
+  const nestedOrder = readRecord(detail.order);
+  const nestedData = readRecord(detail.data);
+
+  return Object.keys(nestedOrder).length > 0
+    ? nestedOrder
+    : Object.keys(nestedData).length > 0
+      ? nestedData
+      : detail;
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function readArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function readText(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+
+    if (typeof value === "number") {
+      return String(value);
+    }
+  }
+
+  return "";
+}
+
+function formatRecipientName(address: Record<string, unknown>, fallback: unknown) {
+  const name = [address.first_name, address.last_name]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean)
+    .join(" ");
+
+  return name || readText(fallback, "No recipient");
+}
+
+function formatAddress(address: Record<string, unknown>) {
+  const line1 = readText(address.address_1);
+  const line2 = readText(address.address_2);
+  const cityStateZip = [
+    readText(address.city),
+    readText(address.province),
+    readText(address.postal_code),
+  ].filter(Boolean).join(", ");
+  const country = readText(address.country_code).toUpperCase();
+  const parts = [line1, line2, cityStateZip, country].filter(Boolean);
+
+  return parts.length > 0 ? parts.join("\n") : "No shipping address";
 }
 
 function DriverMap({
