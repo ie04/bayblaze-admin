@@ -9,6 +9,15 @@ type RequestOptions = {
   token?: string;
 };
 
+type AccountAuthResponse = {
+  account: Account;
+  session: { token: string };
+};
+
+type GoogleOAuthStartResponse = {
+  authorizationUrl: string;
+};
+
 export function loadStoredSession(): Session | null {
   const raw = window.localStorage.getItem(sessionKey);
   if (!raw) return null;
@@ -31,19 +40,63 @@ export function storeSession(session: Session | null) {
 }
 
 export async function login(email: string, password: string): Promise<Session> {
-  const payload = await request<{ account: Account; session: { token: string } }>("/v1/auth/login", {
-    body: { email, password },
+  const payload = await request<AccountAuthResponse>("/v1/auth/login", {
+    body: { email: email.trim().toLowerCase(), password },
     method: "POST",
   });
 
-  if (!payload.account.badges.includes("employee") || !payload.account.roles.includes("admin")) {
-    throw new Error("This account does not have admin access.");
-  }
+  assertAdminAccount(payload.account);
 
   return {
     account: payload.account,
     token: payload.session.token,
   };
+}
+
+export async function startAdminGoogleLogin() {
+  const result = await request<GoogleOAuthStartResponse>("/v1/auth/google/start", {
+    body: {
+      callbackUrl: getGoogleCallbackUrl(),
+      redirectTo: "/",
+    },
+    method: "POST",
+  });
+
+  window.location.assign(result.authorizationUrl);
+}
+
+export async function completeAdminGoogleLogin(searchParams: URLSearchParams): Promise<Session> {
+  const code = searchParams.get("code");
+  const state = searchParams.get("state");
+
+  if (!code || !state) {
+    throw new Error("Google did not return a complete sign-in response.");
+  }
+
+  const payload = await request<AccountAuthResponse>("/v1/auth/google/callback", {
+    body: {
+      callbackUrl: getGoogleCallbackUrl(),
+      code,
+      state,
+    },
+    method: "POST",
+  });
+  assertAdminAccount(payload.account);
+
+  return {
+    account: payload.account,
+    token: payload.session.token,
+  };
+}
+
+function assertAdminAccount(account: Account) {
+  if (!account.badges.includes("employee") || !account.roles.includes("admin")) {
+    throw new Error("This BayBlaze account does not have admin access.");
+  }
+}
+
+function getGoogleCallbackUrl() {
+  return `${window.location.origin}/auth/google/callback`;
 }
 
 export function searchAccounts(token: string, query: string) {

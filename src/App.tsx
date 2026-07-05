@@ -3,8 +3,10 @@ import {
   Check,
   CircleOff,
   ClipboardList,
+  KeyRound,
   LogOut,
   MapPinned,
+  Mail,
   Navigation,
   RefreshCw,
   Route,
@@ -15,6 +17,7 @@ import {
 
 import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader, Textarea } from "./components/ui";
 import {
+  completeAdminGoogleLogin,
   createIsochrone,
   loadDriverMap,
   loadDriverRoutes,
@@ -23,6 +26,7 @@ import {
   loadStoredSession,
   login,
   searchAccounts,
+  startAdminGoogleLogin,
   storeSession,
   updateAccount,
 } from "./lib/adminApi";
@@ -141,7 +145,25 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(() => window.location.pathname === "/auth/google/callback");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (window.location.pathname !== "/auth/google/callback") {
+      return;
+    }
+
+    completeAdminGoogleLogin(new URLSearchParams(window.location.search))
+      .then((session) => {
+        window.history.replaceState({}, "", "/");
+        onLogin(session);
+      })
+      .catch((caught) => {
+        window.history.replaceState({}, "", "/");
+        setError(caught instanceof Error ? caught.message : "Google sign-in failed.");
+      })
+      .finally(() => setGoogleLoading(false));
+  }, [onLogin]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -156,9 +178,21 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
     }
   }
 
+  async function loginWithGoogle() {
+    setGoogleLoading(true);
+    setError("");
+
+    try {
+      await startAdminGoogleLogin();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Google sign-in failed.");
+      setGoogleLoading(false);
+    }
+  }
+
   return (
     <main className="grid min-h-svh place-items-center px-4 py-8">
-      <form className="w-full max-w-md space-y-4" onSubmit={(event) => void submit(event)}>
+      <Card elevated className="w-full max-w-md space-y-5">
         <div className="flex items-center gap-3">
           <span className="grid size-12 place-items-center rounded-[20px] bg-[var(--bb-charcoal)] text-[var(--bb-blaze)]">
             <ShieldCheck size={26} aria-hidden="true" />
@@ -168,16 +202,61 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
             <h1 className="text-3xl font-black uppercase leading-tight">Admin</h1>
           </div>
         </div>
+        <p className="text-sm font-semibold leading-6 text-[var(--bb-muted)]">
+          Use a BayBlaze employee account with the admin role.
+        </p>
+
         {error ? <ErrorState>{error}</ErrorState> : null}
-        <Card elevated className="space-y-4">
-          <Input autoComplete="email" label="Email" onChange={(event) => setEmail(event.target.value)} type="email" value={email} />
-          <Input autoComplete="current-password" label="Password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} />
+
+        <Button fullWidth loading={googleLoading} onClick={() => void loginWithGoogle()} variant="secondary">
+          <GoogleIcon />
+          Continue with Google
+        </Button>
+
+        <div className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.16em] text-[var(--bb-muted)]">
+          <span className="h-px flex-1 bg-[var(--bb-line)]" />
+          <span>Email</span>
+          <span className="h-px flex-1 bg-[var(--bb-line)]" />
+        </div>
+
+        <form className="space-y-4" onSubmit={(event) => void submit(event)}>
+          <Input
+            autoComplete="email"
+            icon={<Mail size={18} aria-hidden="true" />}
+            label="Email"
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="admin@example.com"
+            required
+            type="email"
+            value={email}
+          />
+          <Input
+            autoComplete="current-password"
+            icon={<KeyRound size={18} aria-hidden="true" />}
+            label="Password"
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Password"
+            required
+            type="password"
+            value={password}
+          />
           <Button fullWidth loading={loading} type="submit">
             Sign in
           </Button>
-        </Card>
-      </form>
+        </form>
+      </Card>
     </main>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-5 place-items-center rounded-full border border-[var(--bb-line)] bg-white text-xs font-black text-[var(--bb-charcoal)]"
+    >
+      G
+    </span>
   );
 }
 

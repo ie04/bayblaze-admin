@@ -46,6 +46,8 @@ Current dashboard API routes:
 
 ```text
 POST  /v1/auth/login
+POST  /v1/auth/google/start
+POST  /v1/auth/google/callback
 GET   /v1/auth/me
 GET   /v1/admin/accounts
 PATCH /v1/admin/accounts/:uid
@@ -107,6 +109,10 @@ slider-driven map loads may use API cache, and the Recalculate button sends
 - Static hosting should serve only the built `dist` app.
 - Browser-exposed environment variables must use the `VITE_` prefix and be safe
   for public clients.
+- Google OAuth redirect URI for the admin PWA:
+  `https://admin.bayblaze.net/auth/google/callback` in production and
+  `http://localhost:5173/auth/google/callback` for local Vite development when
+  testing Google login.
 
 ## Local Commands
 
