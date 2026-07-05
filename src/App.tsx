@@ -1025,6 +1025,17 @@ function project(point: LatLng, bounds: ReturnType<typeof getBounds>) {
 }
 
 function readOrderLabel(order: MedusaOrder) {
+  const metadata = readRecord(order.metadata);
+  const bayblazeReference = readText(
+    order.orderReference,
+    order.order_reference,
+    order.reference,
+    metadata.orderReference,
+    metadata.order_reference,
+    metadata.reference,
+  );
+
+  if (bayblazeReference) return bayblazeReference;
   if (order.display_id) return `Order #${order.display_id}`;
   if (order.id) return String(order.id);
   return "Order";

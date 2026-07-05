@@ -64,6 +64,7 @@ export type MedusaOrder = Record<string, unknown> & {
   id?: string;
   display_id?: number;
   email?: string;
+  orderReference?: string;
   created_at?: string;
   total?: number;
   currency_code?: string;
