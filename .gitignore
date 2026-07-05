@@ -7,3 +7,4 @@ dist
 *.local
 *.tsbuildinfo
 node_modules/.tmp
+.vercel
