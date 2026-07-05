@@ -134,8 +134,8 @@ export function PageHeader({ actions, eyebrow, icon, title, subtitle }: {
   subtitle?: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-      <div className="min-w-0">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="min-w-0 lg:max-w-2xl lg:flex-1">
         {eyebrow ? <p className="text-xs font-black uppercase text-[var(--bb-blaze)]">{eyebrow}</p> : null}
         <div className="flex items-center gap-3">
           {icon ? <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[var(--bb-surface-warm)] text-[var(--bb-charcoal)]">{icon}</span> : null}
@@ -143,7 +143,7 @@ export function PageHeader({ actions, eyebrow, icon, title, subtitle }: {
         </div>
         {subtitle ? <p className="mt-2 text-sm font-semibold leading-6 text-[var(--bb-muted)]">{subtitle}</p> : null}
       </div>
-      {actions ? <div className="w-full shrink-0 md:w-auto">{actions}</div> : null}
+      {actions ? <div className="w-full shrink-0 lg:w-auto lg:max-w-[42rem]">{actions}</div> : null}
     </div>
   );
 }

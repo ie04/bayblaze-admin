@@ -108,7 +108,7 @@ function App() {
           </nav>
         </aside>
 
-        <section className="min-w-0 pb-24">
+        <section className="min-w-0 pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-24">
           {activeView === "accounts" ? <AccountsView token={session.token} /> : null}
           {activeView === "drivers" ? <DriversView token={session.token} /> : null}
           {activeView === "routes" ? <RoutesView token={session.token} /> : null}
@@ -316,9 +316,9 @@ function AccountsView({ token }: { token: string }) {
       {error ? <ErrorState>{error}</ErrorState> : null}
       {loading ? <LoadingState label="Loading accounts" /> : null}
       {!loading && accounts.length === 0 ? <EmptyState>No matching accounts.</EmptyState> : null}
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         {accounts.map((account) => (
-          <Card key={account.uid} className="space-y-4">
+          <Card key={account.uid} className="space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="truncate text-lg font-black">{account.displayName || account.email}</h3>
@@ -326,7 +326,7 @@ function AccountsView({ token }: { token: string }) {
               </div>
               <Badge tone={account.disabled ? "danger" : "success"}>{account.disabled ? "Disabled" : "Active"}</Badge>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 border-t border-[var(--bb-line)] pt-3">
               {badgeOptions.map((badge) => {
                 const active = account.badges.includes(badge);
                 return (
@@ -462,7 +462,7 @@ function DriversView({ token }: { token: string }) {
     <div className="space-y-4">
       <PageHeader
         actions={
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="grid w-full gap-2 sm:grid-cols-[8rem_minmax(0,1fr)] lg:w-[42rem]">
             <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
               <input
                 checked={showIsochrone}
@@ -472,7 +472,7 @@ function DriversView({ token }: { token: string }) {
               />
               Isochrone
             </label>
-            <label className="flex min-h-12 min-w-72 items-center gap-3 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
+            <label className="flex min-h-12 min-w-0 items-center gap-3 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
               <span className="shrink-0">Round trip</span>
               <input
                 aria-label="Isochrone round trip hours"
@@ -513,7 +513,7 @@ function DriversView({ token }: { token: string }) {
         eyebrow="Live ops"
         icon={<MapPinned size={22} aria-hidden="true" />}
         title="Driver Map"
-        subtitle="Clock, vehicle, queue, location state, and the adjustable WH1 round trip isochrone from BayBlaze API."
+        subtitle="Live driver locations, vehicles, queues, and WH1 coverage."
       />
       {error ? <ErrorState>{error}</ErrorState> : null}
       {isochroneError ? <ErrorState>{isochroneError}</ErrorState> : null}
@@ -572,7 +572,7 @@ function RoutesView({ token }: { token: string }) {
       {error ? <ErrorState>{error}</ErrorState> : null}
       {loading ? <LoadingState label="Loading routes" /> : null}
       {!loading && routes.length === 0 ? <EmptyState>No driver queues are available.</EmptyState> : null}
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className={cx("grid gap-4", routes.length === 1 ? "max-w-3xl" : "2xl:grid-cols-2")}>
         {routes.map((route) => (
           <Card key={route.uid} className="space-y-4">
             <div className="flex items-center justify-between gap-3">
@@ -652,7 +652,7 @@ function OrdersView({ token }: { token: string }) {
         eyebrow="Commerce"
         icon={<ClipboardList size={22} aria-hidden="true" />}
         title="Live Orders"
-        subtitle="Newest Medusa orders and details through BayBlaze API."
+        subtitle="Newest orders and details through BayBlaze API."
       />
       {error ? <ErrorState>{error}</ErrorState> : null}
       {loading ? <LoadingState label="Loading orders" /> : null}
@@ -676,7 +676,7 @@ function OrdersView({ token }: { token: string }) {
             </Card>
           ))}
         </div>
-        <Card className="h-fit space-y-3">
+        <Card className="h-fit space-y-3 xl:sticky xl:top-24">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-black">Order Details</h3>
             {detailLoading ? <RefreshCw className="size-5 animate-spin text-[var(--bb-muted)]" aria-hidden="true" /> : null}
