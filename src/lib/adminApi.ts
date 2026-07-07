@@ -3,6 +3,7 @@ import type {
   AccountBadge,
   AccountRole,
   AdminPromoCode,
+  AdminPromoCodeType,
   DriverMapEntry,
   DriverRoute,
   IsochronePlot,
@@ -26,6 +27,18 @@ type AccountAuthResponse = {
 
 type GoogleOAuthStartResponse = {
   authorizationUrl: string;
+};
+
+type PromoCodeInput = {
+  code: string;
+  codeType: AdminPromoCodeType;
+  discountPercent?: number;
+};
+
+type PromoCodeUpdateInput = {
+  code?: string;
+  codeType?: AdminPromoCodeType;
+  discountPercent?: number;
 };
 
 export function loadStoredSession(): Session | null {
@@ -161,7 +174,7 @@ export function loadPromoCodes(token: string) {
   return request<{ promoCodes: AdminPromoCode[] }>("/v1/admin/promo-codes", { token });
 }
 
-export function createPromoCode(token: string, input: { code: string; discountPercent: number }) {
+export function createPromoCode(token: string, input: PromoCodeInput) {
   return request<{ promoCode: AdminPromoCode }>("/v1/admin/promo-codes", {
     body: input,
     method: "POST",
@@ -172,7 +185,7 @@ export function createPromoCode(token: string, input: { code: string; discountPe
 export function updatePromoCode(
   token: string,
   code: string,
-  input: { code?: string; discountPercent?: number },
+  input: PromoCodeUpdateInput,
 ) {
   return request<{ promoCode: AdminPromoCode }>(`/v1/admin/promo-codes/${encodeURIComponent(code)}`, {
     body: input,
