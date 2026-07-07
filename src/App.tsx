@@ -8,6 +8,7 @@ import {
   MapPinned,
   Mail,
   Navigation,
+  QrCode,
   RefreshCw,
   Route,
   Search,
@@ -33,14 +34,16 @@ import {
 import type { Account, AccountBadge, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, LatLng, MedusaOrder, Session } from "./lib/types";
 import { cx } from "./lib/classes";
 import { hasGoogleMapsBrowserKey, loadGoogleMaps } from "./lib/googleMaps";
+import { PromoToolsView } from "./PromoToolsView";
 
-type View = "accounts" | "drivers" | "routes" | "orders";
+type View = "accounts" | "drivers" | "routes" | "orders" | "promo";
 
 const views: Array<{ id: View; icon: ReactNode; label: string }> = [
   { id: "accounts", icon: <UserCog size={18} aria-hidden="true" />, label: "Accounts" },
   { id: "drivers", icon: <MapPinned size={18} aria-hidden="true" />, label: "Drivers" },
   { id: "routes", icon: <Route size={18} aria-hidden="true" />, label: "Routes" },
   { id: "orders", icon: <ClipboardList size={18} aria-hidden="true" />, label: "Orders" },
+  { id: "promo", icon: <QrCode size={18} aria-hidden="true" />, label: "Promo" },
 ];
 
 const roleOptions: AccountRole[] = ["admin", "driver", "inventory"];
@@ -113,11 +116,12 @@ function App() {
           {activeView === "drivers" ? <DriversView token={session.token} /> : null}
           {activeView === "routes" ? <RoutesView token={session.token} /> : null}
           {activeView === "orders" ? <OrdersView token={session.token} /> : null}
+          {activeView === "promo" ? <PromoToolsView /> : null}
         </section>
       </div>
 
       <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--bb-line)] bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(17,24,39,0.08)] backdrop-blur md:hidden">
-        <nav className="grid grid-cols-4 gap-1" aria-label="Admin navigation">
+        <nav className="grid grid-cols-5 gap-1" aria-label="Admin navigation">
           {views.map((item) => (
             <button
               key={item.id}

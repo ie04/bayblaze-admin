@@ -74,3 +74,36 @@ textarea {
 button {
   -webkit-tap-highlight-color: transparent;
 }
+
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+
+  header,
+  aside,
+  footer,
+  .bayblaze-promo-qr-print ~ *,
+  body:has(.bayblaze-promo-qr-print) .bayblaze-promo-qr-print + * {
+    display: none !important;
+  }
+
+  body:has(.bayblaze-promo-qr-print) main,
+  body:has(.bayblaze-promo-qr-print) main > div,
+  body:has(.bayblaze-promo-qr-print) section {
+    display: block !important;
+    margin: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  body:has(.bayblaze-promo-qr-print) .bayblaze-promo-qr-print {
+    border: 0 !important;
+    box-shadow: none !important;
+    display: block !important;
+    margin: 0 auto !important;
+    max-width: 4in !important;
+    padding: 0.2in !important;
+    width: 4in !important;
+  }
+}

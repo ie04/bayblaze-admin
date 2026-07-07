@@ -90,6 +90,8 @@ write account docs from the dashboard.
   from the Driver Map controls.
 - View driver delivery route stop geometry.
 - View live Medusa orders and order details through `bayblaze-api`.
+- Generate operator-owned promo links and QR assets in the Admin Promo section.
+  The storefront no longer hosts an internal promo QR generator route.
 
 The dashboard renders route plots from API data and draws the isochrone polygon
 inside the live driver Google Map. The live driver map is the one browser Google
