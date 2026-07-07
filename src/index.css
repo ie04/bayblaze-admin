@@ -75,6 +75,11 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+.bayblaze-promo-qr-canvas {
+  height: 220px !important;
+  width: 220px !important;
+}
+
 @media print {
   body {
     background: #ffffff !important;

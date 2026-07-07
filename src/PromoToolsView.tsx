@@ -152,9 +152,10 @@ export function PromoToolsView() {
           <div className="mx-auto grid h-[220px] w-[220px] max-w-full place-items-center overflow-hidden bg-white">
             <canvas
               aria-label="BayBlaze promo QR code"
-              className="block h-[220px] w-[220px] max-w-full rounded-[28px]"
+              className="bayblaze-promo-qr-canvas block max-w-full rounded-[28px]"
               height={qrCanvasSize}
               ref={canvasRef}
+              style={{ height: 220, width: 220 }}
               width={qrCanvasSize}
             />
           </div>
@@ -249,6 +250,8 @@ async function renderPromoQr(canvas: HTMLCanvasElement | null, promoUrl: string)
     width: qrCanvasSize,
   });
 
+  setCanvasDisplaySize(canvas);
+
   const context = canvas.getContext("2d");
 
   if (!context) {
@@ -262,6 +265,12 @@ async function renderPromoQr(canvas: HTMLCanvasElement | null, promoUrl: string)
   const logoY = (qrCanvasSize - centeredLogo.height) / 2;
 
   context.drawImage(centeredLogo, logoX, logoY);
+  setCanvasDisplaySize(canvas);
+}
+
+function setCanvasDisplaySize(canvas: HTMLCanvasElement) {
+  canvas.style.setProperty("height", "220px", "important");
+  canvas.style.setProperty("width", "220px", "important");
 }
 
 function loadImage(src: string) {
