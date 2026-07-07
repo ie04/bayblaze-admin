@@ -116,7 +116,7 @@ function App() {
           {activeView === "drivers" ? <DriversView token={session.token} /> : null}
           {activeView === "routes" ? <RoutesView token={session.token} /> : null}
           {activeView === "orders" ? <OrdersView token={session.token} /> : null}
-          {activeView === "promo" ? <PromoToolsView /> : null}
+          {activeView === "promo" ? <PromoToolsView token={session.token} /> : null}
         </section>
       </div>
 

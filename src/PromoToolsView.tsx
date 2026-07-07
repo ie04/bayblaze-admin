@@ -1,42 +1,220 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Download, Printer, QrCode, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Download, Plus, Printer, QrCode, RefreshCw, Save, Trash2 } from "lucide-react";
 import QRCode from "qrcode";
 
-import { Badge, Button, Card, ErrorState, Input, PageHeader } from "./components/ui";
+import { createPromoCode, deletePromoCode, loadPromoCodes, updatePromoCode } from "./lib/adminApi";
+import type { AdminPromoCode } from "./lib/types";
+import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader } from "./components/ui";
 
 type CopyState = "idle" | "copied" | "failed";
 
+type PromoCard = {
+  code: string;
+  discountPercent: string;
+  id: string;
+  originalCode?: string;
+  persisted: boolean;
+  usedCount?: number;
+};
+
 const defaultStorefrontOrigin = "https://bayblaze.net";
-const defaultPromoCode = "first30";
+const defaultPromoCode = "FIRST30";
+const hiddenStorageKey = "bayblaze_admin_hidden_promo_codes";
 const qrCanvasSize = 1200;
 const qrLogoMaxSize = 330;
 const qrLogoHorizontalPadding = 12;
 const qrLogoPath = "/icons/bayblaze-flame-qr.png";
 
-export function PromoToolsView() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [code, setCode] = useState(defaultPromoCode);
-  const [copyState, setCopyState] = useState<CopyState>("idle");
-  const [discountPercent, setDiscountPercent] = useState("30");
-  const [landingPath, setLandingPath] = useState("/");
-  const [origin, setOrigin] = useState(defaultStorefrontOrigin);
-  const [renderError, setRenderError] = useState("");
-
-  const normalizedCode = normalizePromoCode(code) || defaultPromoCode;
-  const promoUrl = useMemo(() => {
-    return buildPromoUrl({ code: normalizedCode, landingPath, origin });
-  }, [landingPath, normalizedCode, origin]);
+export function PromoToolsView({ token }: { token: string }) {
+  const [promos, setPromos] = useState<PromoCard[]>([]);
+  const [hiddenCodes, setHiddenCodes] = useState<Set<string>>(() => loadHiddenCodes());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
+    loadPromoCodes(token)
+      .then((response) => {
+        if (cancelled) return;
+        setError("");
+        setPromos(response.promoCodes.map(toPromoCard));
+      })
+      .catch((caught) => {
+        if (cancelled) return;
+        setError(caught instanceof Error ? caught.message : "Could not load promo codes.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    window.localStorage.setItem(hiddenStorageKey, JSON.stringify(Array.from(hiddenCodes)));
+  }, [hiddenCodes]);
+
+  function addPromo() {
+    const code = `BB${createPromoCodeSuffix()}`;
+    setPromos((current) => [
+      {
+        code,
+        discountPercent: "30",
+        id: crypto.randomUUID(),
+        persisted: false,
+      },
+      ...current,
+    ]);
+    setHiddenCodes((current) => removeHiddenCode(current, code));
+  }
+
+  function updateLocalPromo(id: string, input: Partial<PromoCard>) {
+    setPromos((current) => current.map((promo) => (promo.id === id ? { ...promo, ...input } : promo)));
+  }
+
+  function removeLocalPromo(id: string) {
+    setPromos((current) => current.filter((promo) => promo.id !== id));
+  }
+
+  function toggleHidden(code: string) {
+    setHiddenCodes((current) => {
+      const next = new Set(current);
+      const normalizedCode = normalizePromoCode(code);
+
+      if (next.has(normalizedCode)) {
+        next.delete(normalizedCode);
+      } else {
+        next.add(normalizedCode);
+      }
+
+      return next;
+    });
+  }
+
+  function reconcileSavedPromo(id: string, promoCode: AdminPromoCode) {
+    setPromos((current) => current.map((promo) => (promo.id === id ? toPromoCard(promoCode) : promo)));
+    setHiddenCodes((current) => removeHiddenCode(current, promoCode.code));
+  }
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        actions={
+          <Button onClick={addPromo} variant="secondary">
+            <Plus size={17} aria-hidden="true" />
+            New promo
+          </Button>
+        }
+        eyebrow="Growth"
+        icon={<QrCode size={22} aria-hidden="true" />}
+        title="Promo QR"
+        subtitle="Create and organize checkout-valid promo links and QR assets."
+      />
+
+      {error ? <ErrorState>{error}</ErrorState> : null}
+      {loading ? <LoadingState label="Loading promo codes..." /> : null}
+      {!loading && promos.length === 0 ? <EmptyState title="No promo codes yet">Create a promo to generate its QR card.</EmptyState> : null}
+
+      <div className="grid gap-3">
+        {promos.map((promo) => {
+          const normalizedCode = normalizePromoCode(promo.code) || defaultPromoCode;
+          const hidden = hiddenCodes.has(normalizedCode);
+
+          return (
+            <PromoCodeCard
+              key={promo.id}
+              hidden={hidden}
+              onDeleteLocal={() => removeLocalPromo(promo.id)}
+              onReconcile={reconcileSavedPromo}
+              onToggleHidden={() => toggleHidden(normalizedCode)}
+              onUpdate={(input) => updateLocalPromo(promo.id, input)}
+              promo={promo}
+              token={token}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PromoCodeCard({
+  hidden,
+  onDeleteLocal,
+  onReconcile,
+  onToggleHidden,
+  onUpdate,
+  promo,
+  token,
+}: {
+  hidden: boolean;
+  onDeleteLocal: () => void;
+  onReconcile: (id: string, promoCode: AdminPromoCode) => void;
+  onToggleHidden: () => void;
+  onUpdate: (input: Partial<PromoCard>) => void;
+  promo: PromoCard;
+  token: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [copyState, setCopyState] = useState<CopyState>("idle");
+  const [renderError, setRenderError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const normalizedCode = normalizePromoCode(promo.code) || defaultPromoCode;
+  const discountPercent = normalizeDiscountPercent(promo.discountPercent);
+  const promoUrl = useMemo(() => buildPromoUrl(normalizedCode), [normalizedCode]);
+  const dirty = !promo.persisted || normalizedCode !== promo.originalCode || String(discountPercent) !== promo.discountPercent.trim();
+
+  useEffect(() => {
+    if (hidden) {
+      return;
+    }
+
     renderPromoQr(canvasRef.current, promoUrl)
       .then(() => setRenderError(""))
       .catch((caught) => {
         setRenderError(caught instanceof Error ? caught.message : "Could not render the QR code.");
       });
-  }, [promoUrl]);
+  }, [hidden, promoUrl]);
 
-  function generateCode() {
-    setCode(`BB${createPromoCodeSuffix()}`);
+  async function savePromo() {
+    try {
+      setSaving(true);
+      setActionError("");
+      const input = { code: normalizedCode, discountPercent };
+      const response = promo.persisted && promo.originalCode
+        ? await updatePromoCode(token, promo.originalCode, input)
+        : await createPromoCode(token, input);
+
+      onReconcile(promo.id, response.promoCode);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Could not save that promo code.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deletePromo() {
+    if (!promo.persisted || !promo.originalCode) {
+      onDeleteLocal();
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      setActionError("");
+      await deletePromoCode(token, promo.originalCode);
+      onDeleteLocal();
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Could not delete that promo code.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function copyPromoUrl() {
@@ -62,169 +240,164 @@ export function PromoToolsView() {
     link.click();
   }
 
-  function printQr() {
-    window.print();
+  function generateReplacementCode() {
+    onUpdate({ code: `BB${createPromoCodeSuffix()}` });
   }
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        eyebrow="Growth"
-        icon={<QrCode size={22} aria-hidden="true" />}
-        title="Promo QR"
-        subtitle="Generate storefront promo links and QR assets for BayBlaze campaigns."
-      />
+    <Card className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={onToggleHidden} type="button">
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[var(--bb-surface-warm)] text-[var(--bb-charcoal)]">
+            {hidden ? <ChevronRight size={20} aria-hidden="true" /> : <ChevronDown size={20} aria-hidden="true" />}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-xl font-black text-[var(--bb-charcoal)]">{normalizedCode}</span>
+            <span className="block text-sm font-semibold text-[var(--bb-muted)]">
+              {hidden ? "Details hidden" : `${discountPercent}% off${promo.persisted ? "" : " draft"}`}
+            </span>
+          </span>
+        </button>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <Card className="space-y-4">
-          <div className="grid gap-3 lg:grid-cols-2">
-            <Input
-              label="Storefront origin"
-              onChange={(event) => setOrigin(event.target.value)}
-              value={origin}
-            />
-            <Input
-              label="Landing path"
-              onChange={(event) => setLandingPath(event.target.value)}
-              value={landingPath}
-            />
-            <Input
-              label="Promo code"
-              onChange={(event) => setCode(normalizePromoCode(event.target.value))}
-              value={code}
-            />
-            <Input
-              label="Discount percent"
-              min="0"
-              onChange={(event) => setDiscountPercent(event.target.value.replace(/[^\d.]/g, "").slice(0, 5))}
-              type="number"
-              value={discountPercent}
-            />
-          </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge tone={hidden ? "neutral" : promo.persisted ? "brand" : "warning"}>{hidden ? "Hidden" : promo.persisted ? "Saved" : "Draft"}</Badge>
+          <Button aria-label={`Delete ${normalizedCode}`} disabled={deleting || saving} onClick={() => void deletePromo()} size="icon" variant="danger">
+            <Trash2 size={17} aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
 
-          <div className="grid gap-2">
-            <p className="text-xs font-black uppercase text-[var(--bb-muted)]">Promo link</p>
-            <div className="break-all rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-4 py-3 text-sm font-bold leading-6 text-[var(--bb-charcoal)]">
-              {promoUrl}
+      {!hidden ? (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Promo code"
+                onChange={(event) => onUpdate({ code: normalizePromoCode(event.target.value) })}
+                value={promo.code}
+              />
+              <Input
+                label="Discount percent"
+                max="100"
+                min="1"
+                onChange={(event) => onUpdate({ discountPercent: event.target.value.replace(/[^\d.]/g, "").slice(0, 5) })}
+                type="number"
+                value={promo.discountPercent}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <p className="text-xs font-black uppercase text-[var(--bb-muted)]">Promo link</p>
+              <div className="break-all rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-4 py-3 text-sm font-bold leading-6 text-[var(--bb-charcoal)]">
+                {promoUrl}
+              </div>
+            </div>
+
+            {promo.persisted ? (
+              <div className="text-xs font-black uppercase text-[var(--bb-muted)]">
+                Used {promo.usedCount ?? 0} times
+              </div>
+            ) : null}
+
+            {renderError ? <ErrorState>{renderError}</ErrorState> : null}
+            {actionError ? <ErrorState>{actionError}</ErrorState> : null}
+
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+              <Button disabled={saving || deleting} onClick={() => void savePromo()} variant={dirty ? "primary" : "secondary"}>
+                <Save size={17} aria-hidden="true" />
+                {saving ? "Saving" : promo.persisted ? "Save" : "Create"}
+              </Button>
+              <Button onClick={generateReplacementCode} variant="secondary">
+                <RefreshCw size={17} aria-hidden="true" />
+                Generate
+              </Button>
+              <Button onClick={() => void copyPromoUrl()} variant="secondary">
+                <Copy size={17} aria-hidden="true" />
+                {copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy link"}
+              </Button>
+              <Button onClick={downloadPng} variant="secondary">
+                <Download size={17} aria-hidden="true" />
+                PNG
+              </Button>
+              <Button onClick={() => window.print()} variant="secondary">
+                <Printer size={17} aria-hidden="true" />
+                Print
+              </Button>
             </div>
           </div>
 
-          {renderError ? <ErrorState>{renderError}</ErrorState> : null}
-
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <Button onClick={generateCode} variant="secondary">
-              <RefreshCw size={17} aria-hidden="true" />
-              Generate
-            </Button>
-            <Button onClick={() => void copyPromoUrl()} variant="secondary">
-              <Copy size={17} aria-hidden="true" />
-              {copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy link"}
-            </Button>
-            <Button onClick={downloadPng} variant="secondary">
-              <Download size={17} aria-hidden="true" />
-              PNG
-            </Button>
-            <Button onClick={printQr} variant="secondary">
-              <Printer size={17} aria-hidden="true" />
-              Print
-            </Button>
+          <div className="bayblaze-promo-qr-print grid place-items-center rounded-2xl border border-[var(--bb-line)] bg-white p-4 text-center">
+            <div>
+              <Badge tone="brand">BayBlaze</Badge>
+              <h3 className="mt-3 text-2xl font-black leading-tight">{discountPercent}% Off</h3>
+              <p className="text-sm font-semibold text-[var(--bb-muted)]">Promo code {normalizedCode}</p>
+              <div className="mx-auto mt-4 grid h-[220px] w-[220px] max-w-full place-items-center overflow-hidden bg-white">
+                <canvas
+                  aria-label="BayBlaze promo QR code"
+                  className="bayblaze-promo-qr-canvas block max-w-full"
+                  height={qrCanvasSize}
+                  ref={canvasRef}
+                  style={{ height: 220, width: 220 }}
+                  width={qrCanvasSize}
+                />
+              </div>
+            </div>
           </div>
-
-          <div className="grid gap-3 border-t border-[var(--bb-line)] pt-4 sm:grid-cols-3">
-            <Metric label="Query" value={`?promo=${normalizedCode}`} />
-            <Metric label="QR size" value="1200px PNG" />
-            <Metric label="Campaign" value={`${discountPercent || "0"}% off`} />
-          </div>
-        </Card>
-
-        <Card className="bayblaze-promo-qr-print h-fit space-y-4 text-center xl:sticky xl:top-24">
-          <div>
-            <Badge tone="brand">BayBlaze</Badge>
-            <h3 className="mt-3 text-2xl font-black leading-tight">
-              {discountPercent || "0"}% Off
-            </h3>
-            <p className="text-sm font-semibold text-[var(--bb-muted)]">
-              Promo code {normalizedCode}
-            </p>
-          </div>
-
-          <div className="mx-auto grid h-[220px] w-[220px] max-w-full place-items-center overflow-hidden bg-white">
-            <canvas
-              aria-label="BayBlaze promo QR code"
-              className="bayblaze-promo-qr-canvas block max-w-full"
-              height={qrCanvasSize}
-              ref={canvasRef}
-              style={{ height: 220, width: 220 }}
-              width={qrCanvasSize}
-            />
-          </div>
-
-          <p className="mx-auto max-w-72 text-sm font-semibold leading-6 text-[var(--bb-muted)]">
-            Scan to open the BayBlaze storefront with this promo applied.
-          </p>
-          <p className="break-all text-[11px] font-semibold leading-5 text-[var(--bb-muted)]">
-            {promoUrl}
-          </p>
-        </Card>
-      </div>
-    </div>
+        </div>
+      ) : null}
+    </Card>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[var(--bb-line)] bg-white px-3 py-2">
-      <p className="text-[11px] font-black uppercase text-[var(--bb-muted)]">{label}</p>
-      <p className="mt-0.5 truncate text-sm font-black">{value}</p>
-    </div>
-  );
+function toPromoCard(promoCode: AdminPromoCode): PromoCard {
+  return {
+    code: promoCode.code,
+    discountPercent: String(promoCode.discountPercent),
+    id: promoCode.code,
+    originalCode: promoCode.code,
+    persisted: true,
+    usedCount: promoCode.usedCount,
+  };
 }
 
-function buildPromoUrl({ code, landingPath, origin }: { code: string; landingPath: string; origin: string }) {
-  const url = new URL(normalizeLandingPath(landingPath), normalizeOrigin(origin));
+function loadHiddenCodes() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(hiddenStorageKey) || "[]");
+
+    if (!Array.isArray(parsed)) {
+      return new Set<string>();
+    }
+
+    return new Set(parsed.map((code) => normalizePromoCode(String(code))).filter(Boolean));
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function removeHiddenCode(current: Set<string>, code: string) {
+  const next = new Set(current);
+  next.delete(normalizePromoCode(code));
+  return next;
+}
+
+function buildPromoUrl(code: string) {
+  const url = new URL("/", defaultStorefrontOrigin);
   url.searchParams.set("promo", code);
   return url.toString();
 }
 
 function normalizePromoCode(value: string) {
-  return value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+  return value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80).toUpperCase();
 }
 
-function normalizeLandingPath(path: string) {
-  const trimmedPath = path.trim();
+function normalizeDiscountPercent(value: string) {
+  const number = Number(value);
 
-  if (!trimmedPath || trimmedPath.startsWith("//")) {
-    return "/";
+  if (!Number.isFinite(number)) {
+    return 30;
   }
 
-  if (trimmedPath.startsWith("http://") || trimmedPath.startsWith("https://")) {
-    try {
-      const url = new URL(trimmedPath);
-      return `${url.pathname}${url.search}${url.hash}`;
-    } catch {
-      return "/";
-    }
-  }
-
-  return trimmedPath.startsWith("/") ? trimmedPath : `/${trimmedPath}`;
-}
-
-function normalizeOrigin(origin: string) {
-  const trimmedOrigin = origin.trim();
-
-  if (!trimmedOrigin) {
-    return defaultStorefrontOrigin;
-  }
-
-  try {
-    return new URL(trimmedOrigin).origin;
-  } catch {
-    try {
-      return new URL(`https://${trimmedOrigin}`).origin;
-    } catch {
-      return defaultStorefrontOrigin;
-    }
-  }
+  return Math.min(Math.max(Math.round(number * 100) / 100, 1), 100);
 }
 
 function createPromoCodeSuffix() {

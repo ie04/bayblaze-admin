@@ -1,4 +1,14 @@
-import type { Account, AccountBadge, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, MedusaOrder, Session } from "./types";
+import type {
+  Account,
+  AccountBadge,
+  AccountRole,
+  AdminPromoCode,
+  DriverMapEntry,
+  DriverRoute,
+  IsochronePlot,
+  MedusaOrder,
+  Session,
+} from "./types";
 
 const apiBaseUrl = (import.meta.env.VITE_BAYBLAZE_API_URL || "https://api.bayblaze.net").replace(/\/$/, "");
 const sessionKey = "bayblaze_admin_session";
@@ -145,6 +155,37 @@ export async function loadOrders(token: string) {
 
 export function loadOrderDetail(token: string, orderId: string) {
   return request<Record<string, unknown>>(`/v1/admin/orders/${encodeURIComponent(orderId)}`, { token });
+}
+
+export function loadPromoCodes(token: string) {
+  return request<{ promoCodes: AdminPromoCode[] }>("/v1/admin/promo-codes", { token });
+}
+
+export function createPromoCode(token: string, input: { code: string; discountPercent: number }) {
+  return request<{ promoCode: AdminPromoCode }>("/v1/admin/promo-codes", {
+    body: input,
+    method: "POST",
+    token,
+  });
+}
+
+export function updatePromoCode(
+  token: string,
+  code: string,
+  input: { code?: string; discountPercent?: number },
+) {
+  return request<{ promoCode: AdminPromoCode }>(`/v1/admin/promo-codes/${encodeURIComponent(code)}`, {
+    body: input,
+    method: "PATCH",
+    token,
+  });
+}
+
+export function deletePromoCode(token: string, code: string) {
+  return request<{ ok: true }>(`/v1/admin/promo-codes/${encodeURIComponent(code)}`, {
+    method: "DELETE",
+    token,
+  });
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {

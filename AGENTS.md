@@ -54,6 +54,10 @@ PATCH /v1/admin/accounts/:uid
 GET   /v1/admin/drivers/map
 GET   /v1/admin/drivers/routes
 POST  /v1/admin/isochrones
+GET   /v1/admin/promo-codes
+POST  /v1/admin/promo-codes
+PATCH /v1/admin/promo-codes/:code
+DELETE /v1/admin/promo-codes/:code
 GET   /v1/admin/orders
 GET   /v1/admin/orders/:orderId
 ```
@@ -90,7 +94,10 @@ write account docs from the dashboard.
   from the Driver Map controls.
 - View driver delivery route stop geometry.
 - View live Medusa orders and order details through `bayblaze-api`.
-- Generate operator-owned promo links and QR assets in the Admin Promo section.
+- Create, update, delete, collapse, and generate QR assets for admin-owned
+  checkout promo codes in the Admin Promo section. Admin-created promos are
+  persisted by `bayblaze-api` as `admin_promo` discount records; hidden/open
+  card state is only a local dashboard organization preference.
   The storefront no longer hosts an internal promo QR generator route.
 
 The dashboard renders route plots from API data and draws the isochrone polygon

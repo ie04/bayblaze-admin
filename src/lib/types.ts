@@ -60,6 +60,17 @@ export type IsochronePlot = {
   travelMinutes: number;
 };
 
+export type AdminPromoCode = {
+  code: string;
+  discountPercent: number;
+  minimumSpendCents: number;
+  status: string;
+  usageLimit: number;
+  usedCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type MedusaOrder = Record<string, unknown> & {
   id?: string;
   display_id?: number;
