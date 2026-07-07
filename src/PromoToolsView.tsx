@@ -9,7 +9,6 @@ type CopyState = "idle" | "copied" | "failed";
 const defaultStorefrontOrigin = "https://bayblaze.net";
 const defaultPromoCode = "first30";
 const qrCanvasSize = 1200;
-const qrBorderRadius = 28;
 const qrLogoMaxSize = 330;
 const qrLogoHorizontalPadding = 12;
 const qrLogoPath = "/icons/bayblaze-flame-qr.png";
@@ -152,7 +151,7 @@ export function PromoToolsView() {
           <div className="mx-auto grid h-[220px] w-[220px] max-w-full place-items-center overflow-hidden bg-white">
             <canvas
               aria-label="BayBlaze promo QR code"
-              className="bayblaze-promo-qr-canvas block max-w-full rounded-[28px]"
+              className="bayblaze-promo-qr-canvas block max-w-full"
               height={qrCanvasSize}
               ref={canvasRef}
               style={{ height: 220, width: 220 }}
@@ -258,8 +257,6 @@ async function renderPromoQr(canvas: HTMLCanvasElement | null, promoUrl: string)
     throw new Error("Could not prepare the QR canvas.");
   }
 
-  applyCanvasBorderRadius(canvas, context, qrBorderRadius);
-
   const centeredLogo = await buildCenteredLogoCanvas(qrLogoPath);
   const logoX = (qrCanvasSize - centeredLogo.width) / 2;
   const logoY = (qrCanvasSize - centeredLogo.height) / 2;
@@ -333,25 +330,4 @@ async function buildCenteredLogoCanvas(src: string) {
   context.drawImage(logoCanvas, qrLogoHorizontalPadding, 0);
 
   return canvas;
-}
-
-function applyCanvasBorderRadius(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, radius: number) {
-  const sourceCanvas = document.createElement("canvas");
-  const sourceContext = sourceCanvas.getContext("2d");
-
-  if (!sourceContext) {
-    return;
-  }
-
-  sourceCanvas.width = canvas.width;
-  sourceCanvas.height = canvas.height;
-  sourceContext.drawImage(canvas, 0, 0);
-
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.save();
-  context.beginPath();
-  context.roundRect(0, 0, canvas.width, canvas.height, radius);
-  context.clip();
-  context.drawImage(sourceCanvas, 0, 0);
-  context.restore();
 }
