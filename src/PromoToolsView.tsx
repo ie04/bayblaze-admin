@@ -3,16 +3,19 @@ import { ChevronDown, ChevronRight, Copy, Download, Plus, Printer, QrCode, Refre
 import QRCode from "qrcode";
 
 import { createPromoCode, deletePromoCode, loadPromoCodes, updatePromoCode } from "./lib/adminApi";
-import type { AdminPromoCode } from "./lib/types";
+import type { AdminPromoCode, AdminPromoCodeType } from "./lib/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader } from "./components/ui";
 
 type CopyState = "idle" | "copied" | "failed";
 
 type PromoCard = {
   code: string;
+  codeType: AdminPromoCodeType;
   discountPercent: string;
   id: string;
   originalCode?: string;
+  originalCodeType?: AdminPromoCodeType;
+  originalDiscountPercent?: string;
   persisted: boolean;
   usedCount?: number;
 };
@@ -63,6 +66,7 @@ export function PromoToolsView({ token }: { token: string }) {
     setPromos((current) => [
       {
         code,
+        codeType: "discount",
         discountPercent: "30",
         id: crypto.randomUUID(),
         persisted: false,
@@ -168,7 +172,13 @@ function PromoCodeCard({
   const normalizedCode = normalizePromoCode(promo.code) || defaultPromoCode;
   const discountPercent = normalizeDiscountPercent(promo.discountPercent);
   const promoUrl = useMemo(() => buildPromoUrl(normalizedCode), [normalizedCode]);
-  const dirty = !promo.persisted || normalizedCode !== promo.originalCode || String(discountPercent) !== promo.discountPercent.trim();
+  const dirty =
+    !promo.persisted ||
+    normalizedCode !== promo.originalCode ||
+    promo.codeType !== (promo.originalCodeType ?? "discount") ||
+    (promo.codeType === "discount" && String(discountPercent) !== (promo.originalDiscountPercent ?? promo.discountPercent.trim()));
+  const promoTitle = getPromoTitle({ codeType: promo.codeType, discountPercent });
+  const promoSummary = `${promoTitle}${promo.persisted ? "" : " draft"}`;
 
   useEffect(() => {
     if (hidden) {
@@ -186,7 +196,11 @@ function PromoCodeCard({
     try {
       setSaving(true);
       setActionError("");
-      const input = { code: normalizedCode, discountPercent };
+      const input = getPromoSaveInput({
+        code: normalizedCode,
+        codeType: promo.codeType,
+        discountPercent,
+      });
       const response = promo.persisted && promo.originalCode
         ? await updatePromoCode(token, promo.originalCode, input)
         : await createPromoCode(token, input);
@@ -254,7 +268,7 @@ function PromoCodeCard({
           <span className="min-w-0">
             <span className="block truncate text-xl font-black text-[var(--bb-charcoal)]">{normalizedCode}</span>
             <span className="block text-sm font-semibold text-[var(--bb-muted)]">
-              {`${discountPercent}% off${promo.persisted ? "" : " draft"}`}
+              {promoSummary}
             </span>
           </span>
         </button>
@@ -276,14 +290,31 @@ function PromoCodeCard({
                 onChange={(event) => onUpdate({ code: normalizePromoCode(event.target.value) })}
                 value={promo.code}
               />
-              <Input
-                label="Discount percent"
-                max="100"
-                min="1"
-                onChange={(event) => onUpdate({ discountPercent: event.target.value.replace(/[^\d.]/g, "").slice(0, 5) })}
-                type="number"
-                value={promo.discountPercent}
-              />
+              <label className="grid gap-2 text-sm font-black uppercase tracking-[0.12em] text-[var(--bb-muted)]">
+                Promo type
+                <select
+                  className="min-h-12 rounded-2xl border border-[var(--bb-line)] bg-white px-4 text-base font-bold normal-case tracking-normal text-[var(--bb-charcoal)] outline-none transition focus:border-[var(--bb-green)]"
+                  onChange={(event) => onUpdate({ codeType: event.target.value as AdminPromoCodeType })}
+                  value={promo.codeType}
+                >
+                  <option value="discount">Percent off</option>
+                  <option value="bogo">Buy 1 get 1 free</option>
+                </select>
+              </label>
+              {promo.codeType === "discount" ? (
+                <Input
+                  label="Discount percent"
+                  max="100"
+                  min="1"
+                  onChange={(event) => onUpdate({ discountPercent: event.target.value.replace(/[^\d.]/g, "").slice(0, 5) })}
+                  type="number"
+                  value={promo.discountPercent}
+                />
+              ) : (
+                <div className="rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-4 py-3 text-sm font-semibold leading-6 text-[var(--bb-charcoal)] sm:col-span-2">
+                  BOGO applies one free item for every two qualifying cart items. At checkout, the lowest-priced item in each pair is discounted.
+                </div>
+              )}
             </div>
 
             <div className="grid gap-2">
@@ -329,7 +360,7 @@ function PromoCodeCard({
           <div className="bayblaze-promo-qr-print grid place-items-center rounded-2xl border border-[var(--bb-line)] bg-white p-4 text-center">
             <div>
               <Badge tone="brand">BayBlaze</Badge>
-              <h3 className="mt-3 text-2xl font-black leading-tight">{discountPercent}% Off</h3>
+              <h3 className="mt-3 text-2xl font-black leading-tight">{promoTitle}</h3>
               <p className="text-sm font-semibold text-[var(--bb-muted)]">Promo code {normalizedCode}</p>
               <div className="mx-auto mt-4 grid h-[220px] w-[220px] max-w-full place-items-center overflow-hidden bg-white">
                 <canvas
@@ -350,14 +381,46 @@ function PromoCodeCard({
 }
 
 function toPromoCard(promoCode: AdminPromoCode): PromoCard {
+  const codeType = promoCode.codeType === "bogo" ? "bogo" : "discount";
+  const discountPercent = String(promoCode.discountPercent || 30);
+
   return {
     code: promoCode.code,
-    discountPercent: String(promoCode.discountPercent),
+    codeType,
+    discountPercent,
     id: promoCode.code,
     originalCode: promoCode.code,
+    originalCodeType: codeType,
+    originalDiscountPercent: discountPercent,
     persisted: true,
     usedCount: promoCode.usedCount,
   };
+}
+
+function getPromoSaveInput({
+  code,
+  codeType,
+  discountPercent,
+}: {
+  code: string;
+  codeType: AdminPromoCodeType;
+  discountPercent: number;
+}) {
+  if (codeType === "bogo") {
+    return { code, codeType };
+  }
+
+  return { code, codeType, discountPercent };
+}
+
+function getPromoTitle({
+  codeType,
+  discountPercent,
+}: {
+  codeType: AdminPromoCodeType;
+  discountPercent: number;
+}) {
+  return codeType === "bogo" ? "Buy 1 Get 1 Free" : `${discountPercent}% Off`;
 }
 
 function loadHiddenCodes() {
