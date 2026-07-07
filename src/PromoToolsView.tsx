@@ -254,13 +254,13 @@ function PromoCodeCard({
           <span className="min-w-0">
             <span className="block truncate text-xl font-black text-[var(--bb-charcoal)]">{normalizedCode}</span>
             <span className="block text-sm font-semibold text-[var(--bb-muted)]">
-              {hidden ? "Details hidden" : `${discountPercent}% off${promo.persisted ? "" : " draft"}`}
+              {`${discountPercent}% off${promo.persisted ? "" : " draft"}`}
             </span>
           </span>
         </button>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Badge tone={hidden ? "neutral" : promo.persisted ? "brand" : "warning"}>{hidden ? "Hidden" : promo.persisted ? "Saved" : "Draft"}</Badge>
+          <Badge tone={promo.persisted ? "success" : "warning"}>{promo.persisted ? "PUBLISHED" : "DRAFT"}</Badge>
           <Button aria-label={`Delete ${normalizedCode}`} disabled={deleting || saving} onClick={() => void deletePromo()} size="icon" variant="danger">
             <Trash2 size={17} aria-hidden="true" />
           </Button>
