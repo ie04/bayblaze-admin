@@ -60,8 +60,11 @@ export type IsochronePlot = {
   travelMinutes: number;
 };
 
+export type AdminPromoCodeType = "discount" | "bogo";
+
 export type AdminPromoCode = {
   code: string;
+  codeType: AdminPromoCodeType;
   discountPercent: number;
   minimumSpendCents: number;
   status: string;
