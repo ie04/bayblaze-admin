@@ -1050,7 +1050,7 @@ function formatMoney(value: unknown, currency: unknown) {
   return new Intl.NumberFormat("en-US", {
     currency: typeof currency === "string" ? currency.toUpperCase() : "USD",
     style: "currency",
-  }).format(value / 100);
+  }).format(value);
 }
 
 function clampNumber(value: number, min: number, max: number) {
