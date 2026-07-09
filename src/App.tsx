@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
+  ChevronDown,
+  ChevronRight,
   Check,
   CircleOff,
   ClipboardList,
@@ -271,6 +273,7 @@ function GoogleIcon() {
 
 function AccountsView({ token }: { token: string }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [expandedAccountUids, setExpandedAccountUids] = useState<Set<string>>(() => new Set());
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyUid, setBusyUid] = useState("");
@@ -301,6 +304,20 @@ function AccountsView({ token }: { token: string }) {
     }
   }
 
+  function toggleExpandedAccount(uid: string) {
+    setExpandedAccountUids((current) => {
+      const next = new Set(current);
+
+      if (next.has(uid)) {
+        next.delete(uid);
+      } else {
+        next.add(uid);
+      }
+
+      return next;
+    });
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(""), 0);
     return () => window.clearTimeout(timer);
@@ -324,78 +341,105 @@ function AccountsView({ token }: { token: string }) {
       {error ? <ErrorState>{error}</ErrorState> : null}
       {loading ? <LoadingState label="Loading accounts" /> : null}
       {!loading && accounts.length === 0 ? <EmptyState>No matching accounts.</EmptyState> : null}
-      <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-        {accounts.map((account) => (
-          <Card key={account.uid} className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="truncate text-lg font-black">{account.displayName || account.email}</h3>
-                <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{account.email}</p>
+      <div className="grid gap-3">
+        {accounts.map((account) => {
+          const expanded = expandedAccountUids.has(account.uid);
+          const roleSummary = account.roles.length > 0 ? account.roles.join(", ") : "No employee roles";
+
+          return (
+            <Card key={account.uid} className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <button aria-expanded={expanded} className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => toggleExpandedAccount(account.uid)} type="button">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[var(--bb-surface-warm)] text-[var(--bb-charcoal)]">
+                    {expanded ? <ChevronDown size={20} aria-hidden="true" /> : <ChevronRight size={20} aria-hidden="true" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-xl font-black text-[var(--bb-charcoal)]">{account.displayName || account.email}</span>
+                    <span className="block truncate text-sm font-semibold text-[var(--bb-muted)]">{account.email}</span>
+                  </span>
+                </button>
+
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <Badge tone={account.disabled ? "danger" : "success"}>{account.disabled ? "Disabled" : "Active"}</Badge>
+                  {account.badges.map((badge) => <Badge key={badge} tone="info">{badge}</Badge>)}
+                </div>
               </div>
-              <Badge tone={account.disabled ? "danger" : "success"}>{account.disabled ? "Disabled" : "Active"}</Badge>
-            </div>
-            <div className="flex flex-wrap gap-2 border-t border-[var(--bb-line)] pt-3">
-              {badgeOptions.map((badge) => {
-                const active = account.badges.includes(badge);
-                return (
-                  <Button
-                    key={badge}
-                    loading={busyUid === account.uid}
-                    onClick={() => {
-                      const nextBadges: AccountBadge[] = [badge];
-                      const nextRoles = badge === "employee" ? account.roles : [];
-                      void patchAccount(account, { badges: nextBadges, roles: nextRoles });
-                    }}
-                    size="sm"
-                    variant={active ? "primary" : "secondary"}
-                  >
-                    {active ? <Check size={15} aria-hidden="true" /> : null}
-                    {badge}
-                  </Button>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {roleOptions.map((role) => {
-                const active = account.roles.includes(role);
-                const employee = account.badges.includes("employee");
-                return (
-                  <Button
-                    key={role}
-                    disabled={!employee}
-                    loading={busyUid === account.uid}
-                    onClick={() => {
-                      const roles = active ? account.roles.filter((item) => item !== role) : [...account.roles, role];
-                      void patchAccount(account, { badges: ["employee"], roles });
-                    }}
-                    size="sm"
-                    variant={active ? "primary" : "secondary"}
-                  >
-                    {active ? <Check size={15} aria-hidden="true" /> : null}
-                    {role}
-                  </Button>
-                );
-              })}
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Button
-                loading={busyUid === account.uid}
-                onClick={() => void patchAccount(account, { settings: { ageVerificationDisabled: !account.settings.ageVerificationDisabled } })}
-                variant={account.settings.ageVerificationDisabled ? "danger" : "quiet"}
-              >
-                <CircleOff size={16} aria-hidden="true" />
-                Age check {account.settings.ageVerificationDisabled ? "off" : "on"}
-              </Button>
-              <Button
-                loading={busyUid === account.uid}
-                onClick={() => void patchAccount(account, { disabled: !account.disabled })}
-                variant={account.disabled ? "secondary" : "danger"}
-              >
-                {account.disabled ? "Enable" : "Disable"}
-              </Button>
-            </div>
-          </Card>
-        ))}
+
+              {!expanded ? (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Metric label="Roles" value={roleSummary} />
+                  <Metric label="Age Check" value={account.settings.ageVerificationDisabled ? "Off" : "On"} />
+                  <Metric label="Status" value={account.disabled ? "Disabled" : "Active"} />
+                </div>
+              ) : null}
+
+              {expanded ? (
+                <div className="space-y-3 border-t border-[var(--bb-line)] pt-3">
+                  <div className="flex flex-wrap gap-2">
+                    {badgeOptions.map((badge) => {
+                      const active = account.badges.includes(badge);
+                      return (
+                        <Button
+                          key={badge}
+                          loading={busyUid === account.uid}
+                          onClick={() => {
+                            const nextBadges: AccountBadge[] = [badge];
+                            const nextRoles = badge === "employee" ? account.roles : [];
+                            void patchAccount(account, { badges: nextBadges, roles: nextRoles });
+                          }}
+                          size="sm"
+                          variant={active ? "primary" : "secondary"}
+                        >
+                          {active ? <Check size={15} aria-hidden="true" /> : null}
+                          {badge}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {roleOptions.map((role) => {
+                      const active = account.roles.includes(role);
+                      const employee = account.badges.includes("employee");
+                      return (
+                        <Button
+                          key={role}
+                          disabled={!employee}
+                          loading={busyUid === account.uid}
+                          onClick={() => {
+                            const roles = active ? account.roles.filter((item) => item !== role) : [...account.roles, role];
+                            void patchAccount(account, { badges: ["employee"], roles });
+                          }}
+                          size="sm"
+                          variant={active ? "primary" : "secondary"}
+                        >
+                          {active ? <Check size={15} aria-hidden="true" /> : null}
+                          {role}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button
+                      loading={busyUid === account.uid}
+                      onClick={() => void patchAccount(account, { settings: { ageVerificationDisabled: !account.settings.ageVerificationDisabled } })}
+                      variant={account.settings.ageVerificationDisabled ? "danger" : "quiet"}
+                    >
+                      <CircleOff size={16} aria-hidden="true" />
+                      Age check {account.settings.ageVerificationDisabled ? "off" : "on"}
+                    </Button>
+                    <Button
+                      loading={busyUid === account.uid}
+                      onClick={() => void patchAccount(account, { disabled: !account.disabled })}
+                      variant={account.disabled ? "secondary" : "danger"}
+                    >
+                      {account.disabled ? "Enable" : "Disable"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
