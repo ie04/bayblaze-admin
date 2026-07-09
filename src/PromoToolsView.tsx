@@ -113,7 +113,6 @@ export function PromoToolsView({ token }: { token: string }) {
             New promo
           </Button>
         }
-        eyebrow="Growth"
         icon={<QrCode size={22} aria-hidden="true" />}
         title="Promo QR"
         subtitle="Create and organize checkout-valid promo links and QR assets."

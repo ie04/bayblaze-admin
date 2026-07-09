@@ -317,7 +317,6 @@ function AccountsView({ token }: { token: string }) {
             </Button>
           </form>
         }
-        eyebrow="Access"
         icon={<UserCog size={22} aria-hidden="true" />}
         title="Accounts"
         subtitle="Search BayBlaze accounts, set customer or employee badges, and grant employee roles."
@@ -519,7 +518,6 @@ function DriversView({ token }: { token: string }) {
             </Button>
           </div>
         }
-        eyebrow="Live ops"
         icon={<MapPinned size={22} aria-hidden="true" />}
         title="Driver Map"
         subtitle="Live driver locations, vehicles, queues, and WH1 coverage."
@@ -573,7 +571,6 @@ function RoutesView({ token }: { token: string }) {
     <div className="space-y-4">
       <PageHeader
         actions={<Button loading={loading} onClick={() => void refresh()} variant="secondary"><RefreshCw size={18} aria-hidden="true" />Refresh</Button>}
-        eyebrow="Dispatch"
         icon={<Route size={22} aria-hidden="true" />}
         title="Driver Routes"
         subtitle="Queue order and route geometry resolved by the API."
@@ -658,7 +655,6 @@ function OrdersView({ token }: { token: string }) {
     <div className="space-y-4">
       <PageHeader
         actions={<Button loading={loading} onClick={() => void refresh()} variant="secondary"><RefreshCw size={18} aria-hidden="true" />Refresh</Button>}
-        eyebrow="Commerce"
         icon={<ClipboardList size={22} aria-hidden="true" />}
         title="Live Orders"
         subtitle="Newest orders and details through BayBlaze API."
