@@ -687,8 +687,8 @@ function OrdersView({ token }: { token: string }) {
                   </p>
                 ) : null}
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  <Metric label="Payment" value={String(order.payment_status || "unknown")} />
-                  <Metric label="Total" value={formatMinorUnitMoney(order.total, order.currency_code)} />
+                  <Metric label="Payment" value={getPaymentMethodDisplay(order)} />
+                  <Metric label="Total" value={formatOrderTotal(order)} />
                   <Metric label="Created" value={formatDate(order.created_at)} />
                 </div>
               </Card>
@@ -728,8 +728,8 @@ function OrderDetailSummary({ detail }: { detail: Record<string, unknown> }) {
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-2">
         <Metric label="Customer" value={readText(order.email, "No email")} />
-        <Metric label="Total" value={formatMinorUnitMoney(order.total, order.currency_code)} />
-        <Metric label="Payment" value={readText(order.payment_status, "unknown")} />
+        <Metric label="Total" value={formatOrderTotal(order)} />
+        <Metric label="Payment" value={getPaymentMethodDisplay(order)} />
         <Metric label="Order" value={orderStatus.label} />
         <Metric label="Delivery" value={deliveryStatus} />
         <Metric label="Created" value={formatDate(order.created_at)} />
@@ -1174,12 +1174,136 @@ function normalizeStatus(value: unknown) {
   return readText(value).toLowerCase().replace(/[\s-]+/g, "_");
 }
 
-function formatMinorUnitMoney(value: unknown, currency: unknown) {
-  if (typeof value !== "number") return "Total n/a";
+function formatOrderTotal(order: Record<string, unknown>) {
+  const total = getOrderTotalMajorUnits(order);
+
+  if (total === null) return "Total n/a";
+
   return new Intl.NumberFormat("en-US", {
-    currency: typeof currency === "string" ? currency.toUpperCase() : "USD",
+    currency: readText(order.currency_code).toUpperCase() || "USD",
     style: "currency",
-  }).format(value / 100);
+  }).format(total);
+}
+
+function getOrderTotalMajorUnits(order: Record<string, unknown>): number | null {
+  const metadata = readRecord(order.metadata);
+  const discountAdjustedTotal = readNumber(
+    metadata.checkout_promo_total_after_discount,
+    metadata.first_order_offer_total_after_discount,
+  );
+
+  if (discountAdjustedTotal !== null) {
+    return discountAdjustedTotal;
+  }
+
+  const explicitCents = readNumber(
+    metadata.order_total_cents,
+    metadata.checkout_total_cents,
+    metadata.total_cents,
+  );
+
+  if (explicitCents !== null) {
+    return explicitCents / 100;
+  }
+
+  const requestedItemsCents = sumRequestedItemCents(metadata.requested_items);
+
+  if (requestedItemsCents !== null) {
+    return requestedItemsCents / 100;
+  }
+
+  const summary = readRecord(order.summary);
+  const medusaTotal = readNumber(
+    order.total,
+    summary.current_order_total,
+    summary.paid_total,
+    readRecord(summary.raw_current_order_total).value,
+  );
+
+  if (medusaTotal === null) {
+    return null;
+  }
+
+  return Number.isInteger(medusaTotal) && Math.abs(medusaTotal) >= 1000
+    ? medusaTotal / 100
+    : medusaTotal;
+}
+
+function sumRequestedItemCents(value: unknown): number | null {
+  const cents = readArray(value).reduce<number>((sum, item) => {
+    const record = readRecord(item);
+    const totalCents = readNumber(record.total_cents, record.totalCents);
+
+    return totalCents === null ? sum : sum + totalCents;
+  }, 0);
+
+  return cents > 0 ? cents : null;
+}
+
+function getPaymentMethodDisplay(order: Record<string, unknown>) {
+  const metadata = readRecord(order.metadata);
+  const paymentCollections = readArray(order.payment_collections);
+  const paymentCollectionMethod = paymentCollections
+    .map((item) => readPaymentCollectionMethod(readRecord(item)))
+    .find(Boolean);
+  const label = readText(
+    metadata.payment_method,
+    metadata.paymentMethod,
+    metadata.checkout_payment_method,
+    metadata.checkoutPaymentMethod,
+    metadata.payment_label,
+    metadata.paymentLabel,
+    metadata.payment_note,
+    order.payment_method,
+    order.paymentMethod,
+    paymentCollectionMethod,
+    order.payment_status,
+  );
+
+  return normalizePaymentMethodLabel(label) || "unknown";
+}
+
+function readPaymentCollectionMethod(paymentCollection: Record<string, unknown>) {
+  const paymentSessions = readArray(paymentCollection.payment_sessions);
+  const payments = readArray(paymentCollection.payments);
+
+  return readText(
+    paymentCollection.provider_id,
+    paymentSessions.map((session) => readRecord(session).provider_id).find(Boolean),
+    payments.map((payment) => readRecord(payment).provider_id).find(Boolean),
+  );
+}
+
+function normalizePaymentMethodLabel(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/[_-]+/g, " ");
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (
+    normalized.includes("p2p") ||
+    normalized.includes("pay on delivery") ||
+    normalized.includes("payment due on delivery") ||
+    normalized.includes("manual") ||
+    normalized.includes("system")
+  ) {
+    return "P2P";
+  }
+
+  return value.trim();
+}
+
+function readNumber(...values: unknown[]): number | null {
+  for (const value of values) {
+    const number = typeof value === "number" || typeof value === "string" ? Number(value) : Number.NaN;
+
+    if (Number.isFinite(number)) {
+      return number;
+    }
+  }
+
+  return null;
 }
 
 function clampNumber(value: number, min: number, max: number) {
