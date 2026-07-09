@@ -904,6 +904,7 @@ async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverM
   });
   const bounds = new maps.LatLngBounds();
   const infoWindow = new maps.InfoWindow();
+  const DriverLocationOverlay = createDriverLocationOverlay(maps);
 
   if (isochronePlot) {
     const polygonPath = isochronePlot.polygon.map((point) => ({ lat: point.lat, lng: point.lng }));
@@ -938,46 +939,102 @@ async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverM
 
   positioned.forEach((driver) => {
     const position = { lat: driver.location.lat, lng: driver.location.lng };
-    const marker = new maps.Marker({
-      icon: {
-        anchor: new maps.Point(18, 18),
-        path: maps.SymbolPath.CIRCLE,
-        fillColor: driver.clockedIn ? "#2f8f46" : "#6d716b",
-        fillOpacity: 1,
-        scale: 10,
-        strokeColor: "#ffffff",
-        strokeWeight: 4,
+    const marker = new DriverLocationOverlay({
+      onClick: () => {
+        infoWindow.setContent([
+          `<div style="font-family:Jost,Arial,sans-serif;min-width:190px;color:#111">`,
+          `<strong style="font-size:15px">${escapeHtml(driver.displayName)}</strong>`,
+          `<div style="margin-top:4px;color:#6d716b;font-weight:700">${escapeHtml(driver.email)}</div>`,
+          `<div style="margin-top:8px;font-weight:800">${driver.clockedIn ? "Clocked in" : "Offline"}</div>`,
+          `<div style="color:#6d716b;font-weight:700">Vehicle: ${escapeHtml(driver.activeVehicle?.label || "None")}</div>`,
+          `<div style="color:#6d716b;font-weight:700">Stops: ${driver.queue?.stopCount ?? 0}</div>`,
+          `</div>`,
+        ].join(""));
+        infoWindow.setPosition(position);
+        infoWindow.open({ map });
       },
-      label: {
-        color: "#ffffff",
-        fontSize: "11px",
-        fontWeight: "800",
-        text: driver.displayName.slice(0, 1).toUpperCase(),
-      },
-      map,
       position,
       title: driver.displayName,
+      tone: driver.clockedIn ? "active" : "offline",
+      text: driver.displayName.slice(0, 1).toUpperCase(),
     });
 
-    marker.addListener("click", () => {
-      infoWindow.setContent([
-        `<div style="font-family:Jost,Arial,sans-serif;min-width:190px;color:#111">`,
-        `<strong style="font-size:15px">${escapeHtml(driver.displayName)}</strong>`,
-        `<div style="margin-top:4px;color:#6d716b;font-weight:700">${escapeHtml(driver.email)}</div>`,
-        `<div style="margin-top:8px;font-weight:800">${driver.clockedIn ? "Clocked in" : "Offline"}</div>`,
-        `<div style="color:#6d716b;font-weight:700">Vehicle: ${escapeHtml(driver.activeVehicle?.label || "None")}</div>`,
-        `<div style="color:#6d716b;font-weight:700">Stops: ${driver.queue?.stopCount ?? 0}</div>`,
-        `</div>`,
-      ].join(""));
-      infoWindow.open({ anchor: marker, map });
-    });
-
+    marker.setMap(map);
     bounds.extend(position);
   });
 
   if (positioned.length > 1 || isochronePlot) {
     map.fitBounds(bounds, 72);
   }
+}
+
+function createDriverLocationOverlay(maps: typeof google.maps) {
+  return class DriverLocationOverlay extends maps.OverlayView {
+    private readonly element: HTMLButtonElement;
+    private readonly position: google.maps.LatLngLiteral;
+
+    constructor({
+      onClick,
+      position,
+      text,
+      title,
+      tone,
+    }: {
+      onClick: () => void;
+      position: google.maps.LatLngLiteral;
+      text: string;
+      title: string;
+      tone: "active" | "offline";
+    }) {
+      super();
+
+      this.position = position;
+      this.element = document.createElement("button");
+      this.element.type = "button";
+      this.element.title = title;
+      this.element.textContent = text;
+      this.element.setAttribute("aria-label", title);
+      this.element.style.alignItems = "center";
+      this.element.style.background = tone === "active" ? "#2f8f46" : "#6d716b";
+      this.element.style.border = "4px solid #ffffff";
+      this.element.style.borderRadius = "999px";
+      this.element.style.boxShadow = "0 8px 16px rgba(17,17,17,0.24)";
+      this.element.style.color = "#ffffff";
+      this.element.style.cursor = "pointer";
+      this.element.style.display = "flex";
+      this.element.style.font = "800 11px Jost, Arial, sans-serif";
+      this.element.style.height = "28px";
+      this.element.style.justifyContent = "center";
+      this.element.style.left = "0";
+      this.element.style.lineHeight = "1";
+      this.element.style.padding = "0";
+      this.element.style.position = "absolute";
+      this.element.style.top = "0";
+      this.element.style.transform = "translate(-50%, -50%)";
+      this.element.style.width = "28px";
+      this.element.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onClick();
+      });
+    }
+
+    override onAdd() {
+      this.getPanes()?.overlayMouseTarget.appendChild(this.element);
+    }
+
+    override draw() {
+      const point = this.getProjection().fromLatLngToDivPixel(new maps.LatLng(this.position));
+
+      if (!point) return;
+
+      this.element.style.left = `${point.x}px`;
+      this.element.style.top = `${point.y}px`;
+    }
+
+    override onRemove() {
+      this.element.remove();
+    }
+  };
 }
 
 function averageLatLng(points: LatLng[]) {
