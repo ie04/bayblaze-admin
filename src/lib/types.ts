@@ -56,7 +56,6 @@ export type IsochronePlot = {
   method: string;
   polygon: LatLng[];
   radiusMeters: number;
-  speedMph: number;
   travelMinutes: number;
 };
 
@@ -81,7 +80,6 @@ export type CoverageArea = {
     intervalHours: number | null;
     nextRunAt: string | null;
   };
-  speedMph: number;
   updatedAt: string;
   warehouse: {
     address: string;
@@ -106,7 +104,6 @@ export type CoverageAreaInput = {
     intervalHours?: number | null;
     nextRunAt?: string | null;
   };
-  speedMph?: number;
   warehouse?: {
     address?: string;
     label?: string;

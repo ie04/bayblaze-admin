@@ -77,7 +77,6 @@ const defaultCoverageForm: CoverageAreaForm = {
   nextRunAt: "",
   sampleBearings: "24",
   scheduleEnabled: false,
-  speedMph: "30",
   warehouseAddress: "13702 42nd St Tampa, FL, 33613",
   warehouseId: "WH1",
   warehouseLabel: "BayBlaze Warehouse 1",
@@ -93,7 +92,6 @@ type CoverageAreaForm = {
   nextRunAt: string;
   sampleBearings: string;
   scheduleEnabled: boolean;
-  speedMph: string;
   warehouseAddress: string;
   warehouseId: string;
   warehouseLabel: string;
@@ -758,7 +756,6 @@ function CoverageAreaFormFields({
       <Input label="Warehouse Address" onChange={(event) => onChange("warehouseAddress", event.target.value)} value={form.warehouseAddress} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Input label="Max Drive Minutes" min="1" onChange={(event) => onChange("maxDriveTimeMinutes", event.target.value)} type="number" value={form.maxDriveTimeMinutes} />
-        <Input label="Speed MPH" min="5" onChange={(event) => onChange("speedMph", event.target.value)} type="number" value={form.speedMph} />
         <Input label="Polygon Points" min="8" onChange={(event) => onChange("sampleBearings", event.target.value)} type="number" value={form.sampleBearings} />
         <Input label="Street Detail" min="3" onChange={(event) => onChange("binarySearchIterations", event.target.value)} type="number" value={form.binarySearchIterations} />
       </div>
@@ -846,7 +843,6 @@ function formFromCoverageArea(coverageArea: CoverageArea): CoverageAreaForm {
     nextRunAt: coverageArea.schedule.nextRunAt ?? "",
     sampleBearings: String(coverageArea.granularity.sampleBearings),
     scheduleEnabled: coverageArea.schedule.enabled,
-    speedMph: String(coverageArea.speedMph),
     warehouseAddress: coverageArea.warehouse.address,
     warehouseId: coverageArea.warehouse.warehouseId,
     warehouseLabel: coverageArea.warehouse.label,
@@ -868,7 +864,6 @@ function coverageInputFromForm(form: CoverageAreaForm): CoverageAreaInput {
       intervalHours: form.intervalHours.trim() ? readPositiveInteger(form.intervalHours, 24) : null,
       nextRunAt: form.nextRunAt.trim() || null,
     },
-    speedMph: readPositiveNumber(form.speedMph, 30),
     warehouse: {
       address: form.warehouseAddress,
       label: form.warehouseLabel,
