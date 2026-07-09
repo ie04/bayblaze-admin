@@ -135,6 +135,12 @@ persistent coverage through `/v1/admin/coverage-areas`.
   `https://admin.bayblaze.net/auth/google/callback` in production and
   `http://localhost:5173/auth/google/callback` for local Vite development when
   testing Google login.
+- After pushing changes that affect a dashboard screen, wait for the Vercel
+  deployment to finish and smoke-test the deployed screen against
+  `https://api.bayblaze.net`. For changed API-backed screens, verify the API
+  preflight from the active Vercel preview origin as well as
+  `https://admin.bayblaze.net`; a missing CORS allow-origin surfaces in the app
+  as `Failed to fetch`.
 
 ## Local Commands
 
