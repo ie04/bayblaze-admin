@@ -670,7 +670,7 @@ function OrdersView({ token }: { token: string }) {
                   <h3 className="truncate text-lg font-black">{readOrderLabel(order)}</h3>
                   <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{order.email || "No customer email"}</p>
                 </div>
-                <Badge tone="info">{formatMoney(order.total, order.currency_code)}</Badge>
+                <Badge tone="info">{formatMinorUnitMoney(order.total, order.currency_code)}</Badge>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <Metric label="Payment" value={String(order.payment_status || "unknown")} />
@@ -712,7 +712,7 @@ function OrderDetailSummary({ detail }: { detail: Record<string, unknown> }) {
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-2">
         <Metric label="Customer" value={readText(order.email, "No email")} />
-        <Metric label="Total" value={formatMoney(order.total, order.currency_code)} />
+        <Metric label="Total" value={formatMinorUnitMoney(order.total, order.currency_code)} />
         <Metric label="Payment" value={readText(order.payment_status, "unknown")} />
         <Metric label="Fulfillment" value={readText(order.fulfillment_status, "unknown")} />
         <Metric label="Delivery" value={deliveryStatus} />
@@ -1045,12 +1045,12 @@ function readOrderLabel(order: MedusaOrder) {
   return "Order";
 }
 
-function formatMoney(value: unknown, currency: unknown) {
+function formatMinorUnitMoney(value: unknown, currency: unknown) {
   if (typeof value !== "number") return "Total n/a";
   return new Intl.NumberFormat("en-US", {
     currency: typeof currency === "string" ? currency.toUpperCase() : "USD",
     style: "currency",
-  }).format(value);
+  }).format(value / 100);
 }
 
 function clampNumber(value: number, min: number, max: number) {
