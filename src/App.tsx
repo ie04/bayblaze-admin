@@ -757,7 +757,23 @@ function CoverageAreaFormFields({
       <div className="grid gap-3 sm:grid-cols-2">
         <Input label="Max Drive Minutes" min="1" onChange={(event) => onChange("maxDriveTimeMinutes", event.target.value)} type="number" value={form.maxDriveTimeMinutes} />
         <Input label="Polygon Points" max="144" min="8" onChange={(event) => onChange("sampleBearings", event.target.value)} type="number" value={form.sampleBearings} />
-        <Input label="Street Detail" max="10" min="3" onChange={(event) => onChange("binarySearchIterations", event.target.value)} type="number" value={form.binarySearchIterations} />
+        <label className="block">
+          <span className="mb-2 flex items-center justify-between gap-3 text-xs font-black uppercase text-[var(--bb-muted)]">
+            Street Detail
+            <span>{readBoundedInteger(form.binarySearchIterations, 5, 3, 10)}</span>
+          </span>
+          <span className="flex min-h-12 items-center rounded-2xl border border-[var(--bb-line)] bg-white px-3 shadow-[var(--bb-shadow-soft)]">
+            <input
+              className="w-full accent-[var(--bb-blaze)]"
+              max="10"
+              min="3"
+              onChange={(event) => onChange("binarySearchIterations", event.target.value)}
+              step="1"
+              type="range"
+              value={readBoundedInteger(form.binarySearchIterations, 5, 3, 10)}
+            />
+          </span>
+        </label>
       </div>
       <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-3 text-sm font-black">
         <input
