@@ -1091,9 +1091,8 @@ function OrdersView({ token }: { token: string }) {
             <h3 className="text-lg font-black">Order Details</h3>
             <div className="flex items-center gap-2">
               {selectedOrderSummary && !isDeletedOrder(selectedOrderSummary) ? (
-                <Button onClick={() => setDeleteTargetOrder(selectedOrderSummary)} size="sm" variant="danger">
-                  <Trash2 size={16} aria-hidden="true" />
-                  Delete
+                <Button aria-label="Delete order" onClick={() => setDeleteTargetOrder(selectedOrderSummary)} size="icon" variant="danger">
+                  <X size={18} aria-hidden="true" />
                 </Button>
               ) : null}
               {detailLoading ? <RefreshCw className="size-5 animate-spin text-[var(--bb-muted)]" aria-hidden="true" /> : null}
@@ -1146,17 +1145,17 @@ function OrderCard({
         <Metric label="Created" value={formatDate(order.created_at)} />
       </div>
       {!deleted ? (
-        <div className="mt-3 border-t border-[var(--bb-line)] pt-3">
+        <div className="mt-3 flex justify-end border-t border-[var(--bb-line)] pt-3">
           <Button
-            fullWidth
+            aria-label="Delete order"
             onClick={(event) => {
               event.stopPropagation();
               onDelete();
             }}
+            size="icon"
             variant="danger"
           >
-            <Trash2 size={18} aria-hidden="true" />
-            Delete Order
+            <X size={18} aria-hidden="true" />
           </Button>
         </div>
       ) : null}
