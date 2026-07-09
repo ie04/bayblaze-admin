@@ -4,41 +4,49 @@ import {
   ChevronRight,
   Check,
   CircleOff,
+  Clock,
   ClipboardList,
   KeyRound,
   LogOut,
   MapPinned,
   Mail,
-  Navigation,
+  Plus,
   QrCode,
   RefreshCw,
   Route,
+  Save,
   Search,
   ShieldCheck,
+  Trash2,
   UserCog,
 } from "lucide-react";
 
-import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader } from "./components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader, Textarea } from "./components/ui";
 import {
   completeAdminGoogleLogin,
-  createIsochrone,
+  createCoverageArea,
+  deleteCoverageArea,
   loadDriverMap,
   loadDriverRoutes,
+  loadCoverageAreas,
   loadOrderDetail,
   loadOrders,
   loadStoredSession,
   login,
+  regenerateCoverageArea,
+  regenerateDueCoverageAreas,
   searchAccounts,
   startAdminGoogleLogin,
   storeSession,
   updateAccount,
+  updateCoverageArea,
 } from "./lib/adminApi";
-import type { Account, AccountBadge, AccountRole, DriverMapEntry, DriverRoute, IsochronePlot, LatLng, MedusaOrder, Session } from "./lib/types";
+import type { Account, AccountBadge, AccountRole, CoverageArea, CoverageAreaInput, DriverMapEntry, DriverRoute, LatLng, MedusaOrder, Session } from "./lib/types";
 import { cx } from "./lib/classes";
 import { hasGoogleMapsBrowserKey, loadGoogleMaps } from "./lib/googleMaps";
 import { PromoToolsView } from "./PromoToolsView";
 
-type View = "accounts" | "drivers" | "routes" | "orders" | "promo";
+type View = "accounts" | "map" | "routes" | "orders" | "promo";
 type OrderStatusDisplay = {
   cancelled: boolean;
   label: "FULFILLED" | "CANCELLED";
@@ -47,7 +55,7 @@ type OrderStatusDisplay = {
 
 const views: Array<{ id: View; icon: ReactNode; label: string }> = [
   { id: "accounts", icon: <UserCog size={18} aria-hidden="true" />, label: "Accounts" },
-  { id: "drivers", icon: <MapPinned size={18} aria-hidden="true" />, label: "Drivers" },
+  { id: "map", icon: <MapPinned size={18} aria-hidden="true" />, label: "Map" },
   { id: "routes", icon: <Route size={18} aria-hidden="true" />, label: "Routes" },
   { id: "orders", icon: <ClipboardList size={18} aria-hidden="true" />, label: "Orders" },
   { id: "promo", icon: <QrCode size={18} aria-hidden="true" />, label: "Promo" },
@@ -55,11 +63,37 @@ const views: Array<{ id: View; icon: ReactNode; label: string }> = [
 
 const roleOptions: AccountRole[] = ["admin", "driver", "inventory"];
 const badgeOptions: AccountBadge[] = ["customer", "employee"];
-const warehouseAddress = "13702 42nd St Tampa, FL, 33613";
-const defaultRoundTripHours = 1;
-const minRoundTripHours = 0.25;
-const maxRoundTripHours = 3;
-const isochroneSpeedMph = 30;
+const defaultCoverageForm: CoverageAreaForm = {
+  active: true,
+  binarySearchIterations: "5",
+  description: "",
+  intervalHours: "",
+  label: "",
+  maxDriveTimeMinutes: "30",
+  nextRunAt: "",
+  sampleBearings: "24",
+  scheduleEnabled: false,
+  speedMph: "30",
+  warehouseAddress: "13702 42nd St Tampa, FL, 33613",
+  warehouseId: "WH1",
+  warehouseLabel: "BayBlaze Warehouse 1",
+};
+
+type CoverageAreaForm = {
+  active: boolean;
+  binarySearchIterations: string;
+  description: string;
+  intervalHours: string;
+  label: string;
+  maxDriveTimeMinutes: string;
+  nextRunAt: string;
+  sampleBearings: string;
+  scheduleEnabled: boolean;
+  speedMph: string;
+  warehouseAddress: string;
+  warehouseId: string;
+  warehouseLabel: string;
+};
 
 function App() {
   const [session, setSession] = useState<Session | null>(() => loadStoredSession());
@@ -120,7 +154,7 @@ function App() {
 
         <section className="min-w-0 pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-24">
           {activeView === "accounts" ? <AccountsView token={session.token} /> : null}
-          {activeView === "drivers" ? <DriversView token={session.token} /> : null}
+          {activeView === "map" ? <MapView token={session.token} /> : null}
           {activeView === "routes" ? <RoutesView token={session.token} /> : null}
           {activeView === "orders" ? <OrdersView token={session.token} /> : null}
           {activeView === "promo" ? <PromoToolsView token={session.token} /> : null}
@@ -445,56 +479,41 @@ function AccountsView({ token }: { token: string }) {
   );
 }
 
-function DriversView({ token }: { token: string }) {
+function MapView({ token }: { token: string }) {
   const [drivers, setDrivers] = useState<DriverMapEntry[]>([]);
-  const [isochronePlot, setIsochronePlot] = useState<IsochronePlot | null>(null);
-  const [isochroneHoursInput, setIsochroneHoursInput] = useState(String(defaultRoundTripHours));
-  const [showIsochrone, setShowIsochrone] = useState(true);
+  const [coverageAreas, setCoverageAreas] = useState<CoverageArea[]>([]);
+  const [selectedCoverageAreaId, setSelectedCoverageAreaId] = useState<string | null>(null);
+  const [coverageForm, setCoverageForm] = useState<CoverageAreaForm>(defaultCoverageForm);
+  const [showCoverage, setShowCoverage] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [isochroneLoading, setIsochroneLoading] = useState(false);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [isochroneError, setIsochroneError] = useState("");
-  const parsedIsochroneHours = Number(isochroneHoursInput);
-  const hasValidIsochroneHours = Number.isFinite(parsedIsochroneHours) && parsedIsochroneHours > 0;
-  const isochroneHours = hasValidIsochroneHours
-    ? clampNumber(parsedIsochroneHours, minRoundTripHours, maxRoundTripHours)
-    : defaultRoundTripHours;
-  const isochroneTravelMinutes = Math.round(isochroneHours * 60);
+  const [coverageError, setCoverageError] = useState("");
+  const selectedCoverageArea = coverageAreas.find((coverageArea) => coverageArea.id === selectedCoverageAreaId) ?? null;
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (preferredCoverageAreaId?: string | null) => {
     setError("");
     setLoading(true);
     try {
-      setDrivers((await loadDriverMap(token)).drivers);
+      const [driverMapPayload, coveragePayload] = await Promise.all([
+        loadDriverMap(token),
+        loadCoverageAreas(token),
+      ]);
+      setDrivers(driverMapPayload.drivers);
+      setCoverageAreas(coveragePayload.coverageAreas);
+      const nextSelectedCoverageArea =
+        coveragePayload.coverageAreas.find((coverageArea) => coverageArea.id === preferredCoverageAreaId) ??
+        coveragePayload.coverageAreas[0] ??
+        null;
+      setSelectedCoverageAreaId(nextSelectedCoverageArea?.id ?? null);
+      setCoverageForm(nextSelectedCoverageArea ? formFromCoverageArea(nextSelectedCoverageArea) : defaultCoverageForm);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Driver map failed.");
+      setError(caught instanceof Error ? caught.message : "Map failed.");
     } finally {
       setLoading(false);
     }
   }, [token]);
-
-  const recalculateIsochrone = useCallback(async (force = false) => {
-    setIsochroneError("");
-    if (!hasValidIsochroneHours) {
-      return;
-    }
-
-    setIsochroneLoading(true);
-    try {
-      const payload = await createIsochrone(token, {
-        force,
-        origin: { address: warehouseAddress },
-        speedMph: isochroneSpeedMph,
-        travelMinutes: isochroneTravelMinutes,
-      });
-      setIsochronePlot(payload.plot);
-      setShowIsochrone(true);
-    } catch (caught) {
-      setIsochroneError(caught instanceof Error ? caught.message : "Isochrone recalculation failed.");
-    } finally {
-      setIsochroneLoading(false);
-    }
-  }, [hasValidIsochroneHours, isochroneTravelMinutes, token]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -503,58 +522,102 @@ function DriversView({ token }: { token: string }) {
     return () => window.clearTimeout(timer);
   }, [refresh]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => void recalculateIsochrone(), 600);
-    return () => window.clearTimeout(timer);
-  }, [recalculateIsochrone]);
+  function updateCoverageForm(field: keyof CoverageAreaForm, value: string | boolean) {
+    setCoverageForm((current) => ({ ...current, [field]: value }));
+  }
 
-  const radiusMiles = isochronePlot ? Math.round(isochronePlot.radiusMeters / 1609.344) : null;
+  function selectCoverageArea(coverageArea: CoverageArea) {
+    setSelectedCoverageAreaId(coverageArea.id);
+    setCoverageForm(formFromCoverageArea(coverageArea));
+  }
+
+  async function saveCoverageArea() {
+    setCoverageError("");
+    setCoverageLoading(true);
+    try {
+      const input = coverageInputFromForm(coverageForm);
+      const payload = selectedCoverageArea
+        ? await updateCoverageArea(token, selectedCoverageArea.id, input)
+        : await createCoverageArea(token, input);
+      await refresh(payload.coverageArea.id);
+      setSelectedCoverageAreaId(payload.coverageArea.id);
+      setShowCoverage(true);
+    } catch (caught) {
+      setCoverageError(caught instanceof Error ? caught.message : "Coverage area save failed.");
+    } finally {
+      setCoverageLoading(false);
+    }
+  }
+
+  async function regenerateSelectedCoverageArea(coverageAreaId: string) {
+    setCoverageError("");
+    setRegeneratingId(coverageAreaId);
+    try {
+      const payload = await regenerateCoverageArea(token, coverageAreaId);
+      setCoverageAreas((current) => current.map((coverageArea) => coverageArea.id === coverageAreaId ? payload.coverageArea : coverageArea));
+      if (selectedCoverageAreaId === coverageAreaId) {
+        setCoverageForm(formFromCoverageArea(payload.coverageArea));
+      }
+      setShowCoverage(true);
+    } catch (caught) {
+      setCoverageError(caught instanceof Error ? caught.message : "Coverage regeneration failed.");
+    } finally {
+      setRegeneratingId(null);
+    }
+  }
+
+  async function regenerateDueCoverage() {
+    setCoverageError("");
+    setCoverageLoading(true);
+    try {
+      const payload = await regenerateDueCoverageAreas(token);
+      await refresh();
+      if (payload.failed.length > 0) {
+        setCoverageError(`${payload.failed.length} scheduled coverage area could not regenerate.`);
+      }
+    } catch (caught) {
+      setCoverageError(caught instanceof Error ? caught.message : "Scheduled regeneration failed.");
+    } finally {
+      setCoverageLoading(false);
+    }
+  }
+
+  async function removeSelectedCoverageArea() {
+    if (!selectedCoverageArea) return;
+
+    setCoverageError("");
+    setCoverageLoading(true);
+    try {
+      await deleteCoverageArea(token, selectedCoverageArea.id);
+      setSelectedCoverageAreaId(null);
+      setCoverageForm(defaultCoverageForm);
+      await refresh(null);
+    } catch (caught) {
+      setCoverageError(caught instanceof Error ? caught.message : "Coverage area delete failed.");
+    } finally {
+      setCoverageLoading(false);
+    }
+  }
+
+  const visibleCoverageAreas = showCoverage ? coverageAreas.filter((coverageArea) => coverageArea.active) : [];
 
   return (
     <div className="space-y-4">
       <PageHeader
         actions={
-          <div className="grid w-full gap-2 sm:grid-cols-[8rem_minmax(0,1fr)] lg:w-[42rem]">
+          <div className="grid w-full gap-2 sm:grid-cols-3 lg:w-[34rem]">
             <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
               <input
-                checked={showIsochrone}
+                checked={showCoverage}
                 className="size-4 accent-[var(--bb-blaze)]"
-                onChange={(event) => setShowIsochrone(event.target.checked)}
+                onChange={(event) => setShowCoverage(event.target.checked)}
                 type="checkbox"
               />
-              Isochrone
+              Coverage
             </label>
-            <label className="flex min-h-12 min-w-0 items-center gap-3 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
-              <span className="shrink-0">Round trip</span>
-              <input
-                aria-label="Isochrone round trip hours"
-                className="min-w-0 flex-1 accent-[var(--bb-blaze)]"
-                max={maxRoundTripHours}
-                min={minRoundTripHours}
-                onChange={(event) => setIsochroneHoursInput(event.target.value)}
-                step={0.25}
-                type="range"
-                value={isochroneHours}
-              />
-              <input
-                aria-label="Isochrone round trip hours value"
-                className="h-9 w-18 rounded-xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-2 text-right text-sm font-black outline-none focus:border-[var(--bb-blaze)]"
-                max={maxRoundTripHours}
-                min={minRoundTripHours}
-                onBlur={() => setIsochroneHoursInput(formatHours(isochroneHours))}
-                onChange={(event) => setIsochroneHoursInput(event.target.value)}
-                step="any"
-                type="number"
-                value={isochroneHoursInput}
-              />
-              <span className="shrink-0 text-xs uppercase text-[var(--bb-muted)]">hr</span>
-              <span className="w-16 shrink-0 text-right text-xs uppercase text-[var(--bb-muted)]">
-                {radiusMiles === null ? `${isochroneTravelMinutes} min` : `~${radiusMiles} mi`}
-              </span>
-            </label>
-            <Button disabled={!hasValidIsochroneHours} loading={isochroneLoading} onClick={() => void recalculateIsochrone(true)} variant="secondary">
-              <Navigation size={18} aria-hidden="true" />
-              Recalculate
+            <Button loading={coverageLoading} onClick={() => void regenerateDueCoverage()} variant="secondary">
+              <Clock size={18} aria-hidden="true" />
+              Due
             </Button>
             <Button loading={loading} onClick={() => void refresh()} variant="secondary">
               <RefreshCw size={18} aria-hidden="true" />
@@ -563,12 +626,98 @@ function DriversView({ token }: { token: string }) {
           </div>
         }
         icon={<MapPinned size={22} aria-hidden="true" />}
-        title="Driver Map"
-        subtitle="Live driver locations, vehicles, queues, and WH1 coverage."
+        title="Map"
+        subtitle="Live drivers, delivery queues, and operational coverage zones."
       />
       {error ? <ErrorState>{error}</ErrorState> : null}
-      {isochroneError ? <ErrorState>{isochroneError}</ErrorState> : null}
-      {loading ? <LoadingState label="Loading drivers" /> : <DriverMap drivers={drivers} isochronePlot={isochronePlot} showIsochrone={showIsochrone} />}
+      {coverageError ? <ErrorState>{coverageError}</ErrorState> : null}
+      {loading ? <LoadingState label="Loading map" /> : (
+        <DriverMap coverageAreas={visibleCoverageAreas} drivers={drivers} showCoverage={showCoverage} />
+      )}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <Card className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black">Coverage Areas</h3>
+              <p className="text-sm font-semibold text-[var(--bb-muted)]">{coverageAreas.length} configured zones</p>
+            </div>
+            <Button
+              onClick={() => {
+                setSelectedCoverageAreaId(null);
+                setCoverageForm(defaultCoverageForm);
+              }}
+              variant="secondary"
+            >
+              <Plus size={18} aria-hidden="true" />
+              New
+            </Button>
+          </div>
+          {coverageAreas.length === 0 ? <EmptyState title="No coverage areas">Create the first delivery zone.</EmptyState> : null}
+          <div className="grid gap-3 lg:grid-cols-2">
+            {coverageAreas.map((coverageArea) => (
+              <button
+                key={coverageArea.id}
+                className={cx(
+                  "rounded-2xl border bg-[var(--bb-surface-warm)] p-3 text-left transition",
+                  selectedCoverageAreaId === coverageArea.id ? "border-[var(--bb-blaze)]" : "border-[var(--bb-line)] hover:border-[var(--bb-blaze)]",
+                )}
+                onClick={() => selectCoverageArea(coverageArea)}
+                type="button"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-black">{coverageArea.label}</p>
+                    <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{coverageArea.warehouse.label}</p>
+                  </div>
+                  <Badge tone={coverageArea.active ? "success" : "neutral"}>{coverageArea.active ? "Active" : "Off"}</Badge>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <Metric label="Drive" value={`${coverageArea.maxDriveTimeMinutes} min`} />
+                  <Metric label="Points" value={String(Math.max(coverageArea.polygon.length - 1, 0))} />
+                  <Metric label="Radius" value={formatMiles(coverageArea.radiusMeters)} />
+                </div>
+                {coverageArea.lastGenerationError ? (
+                  <p className="mt-3 rounded-2xl border border-[var(--bb-danger-soft)] bg-white px-3 py-2 text-sm font-bold text-[var(--bb-danger-strong)]">
+                    {coverageArea.lastGenerationError}
+                  </p>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="h-fit space-y-4 xl:sticky xl:top-24">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black">{selectedCoverageArea ? "Edit Coverage" : "Create Coverage"}</h3>
+              <p className="text-sm font-semibold text-[var(--bb-muted)]">
+                {selectedCoverageArea ? selectedCoverageArea.id : "New zone"}
+              </p>
+            </div>
+            <Badge tone={coverageForm.active ? "success" : "neutral"}>{coverageForm.active ? "Active" : "Off"}</Badge>
+          </div>
+          <CoverageAreaFormFields form={coverageForm} onChange={updateCoverageForm} />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button loading={coverageLoading} onClick={() => void saveCoverageArea()}>
+              <Save size={18} aria-hidden="true" />
+              Save
+            </Button>
+            <Button
+              disabled={!selectedCoverageArea}
+              loading={regeneratingId === selectedCoverageArea?.id}
+              onClick={() => selectedCoverageArea ? void regenerateSelectedCoverageArea(selectedCoverageArea.id) : undefined}
+              variant="secondary"
+            >
+              <RefreshCw size={18} aria-hidden="true" />
+              Regenerate
+            </Button>
+            <Button disabled={!selectedCoverageArea} onClick={() => void removeSelectedCoverageArea()} variant="danger">
+              <Trash2 size={18} aria-hidden="true" />
+              Delete
+            </Button>
+          </div>
+        </Card>
+      </div>
       <div className="grid gap-3 lg:grid-cols-3">
         {drivers.map((driver) => (
           <Card key={driver.uid} className="space-y-3">
@@ -587,6 +736,112 @@ function DriversView({ token }: { token: string }) {
       </div>
     </div>
   );
+}
+
+function CoverageAreaFormFields({
+  form,
+  onChange,
+}: {
+  form: CoverageAreaForm;
+  onChange: (field: keyof CoverageAreaForm, value: string | boolean) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-3 text-sm font-black">
+        <input
+          checked={form.active}
+          className="size-4 accent-[var(--bb-blaze)]"
+          onChange={(event) => onChange("active", event.target.checked)}
+          type="checkbox"
+        />
+        Active
+      </label>
+      <Input label="Label" onChange={(event) => onChange("label", event.target.value)} value={form.label} />
+      <Textarea label="Description" onChange={(event) => onChange("description", event.target.value)} value={form.description} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input label="Warehouse ID" onChange={(event) => onChange("warehouseId", event.target.value)} value={form.warehouseId} />
+        <Input label="Warehouse Label" onChange={(event) => onChange("warehouseLabel", event.target.value)} value={form.warehouseLabel} />
+      </div>
+      <Input label="Warehouse Address" onChange={(event) => onChange("warehouseAddress", event.target.value)} value={form.warehouseAddress} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input label="Max Drive Minutes" min="1" onChange={(event) => onChange("maxDriveTimeMinutes", event.target.value)} type="number" value={form.maxDriveTimeMinutes} />
+        <Input label="Speed MPH" min="5" onChange={(event) => onChange("speedMph", event.target.value)} type="number" value={form.speedMph} />
+        <Input label="Polygon Points" min="8" onChange={(event) => onChange("sampleBearings", event.target.value)} type="number" value={form.sampleBearings} />
+        <Input label="Street Detail" min="3" onChange={(event) => onChange("binarySearchIterations", event.target.value)} type="number" value={form.binarySearchIterations} />
+      </div>
+      <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-3 text-sm font-black">
+        <input
+          checked={form.scheduleEnabled}
+          className="size-4 accent-[var(--bb-blaze)]"
+          onChange={(event) => onChange("scheduleEnabled", event.target.checked)}
+          type="checkbox"
+        />
+        Auto Regenerate
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input label="Interval Hours" min="1" onChange={(event) => onChange("intervalHours", event.target.value)} type="number" value={form.intervalHours} />
+        <Input label="Next Run ISO" onChange={(event) => onChange("nextRunAt", event.target.value)} placeholder="2026-07-09T20:00:00Z" value={form.nextRunAt} />
+      </div>
+    </div>
+  );
+}
+
+function formFromCoverageArea(coverageArea: CoverageArea): CoverageAreaForm {
+  return {
+    active: coverageArea.active,
+    binarySearchIterations: String(coverageArea.granularity.binarySearchIterations),
+    description: coverageArea.description,
+    intervalHours: coverageArea.schedule.intervalHours === null ? "" : String(coverageArea.schedule.intervalHours),
+    label: coverageArea.label,
+    maxDriveTimeMinutes: String(coverageArea.maxDriveTimeMinutes),
+    nextRunAt: coverageArea.schedule.nextRunAt ?? "",
+    sampleBearings: String(coverageArea.granularity.sampleBearings),
+    scheduleEnabled: coverageArea.schedule.enabled,
+    speedMph: String(coverageArea.speedMph),
+    warehouseAddress: coverageArea.warehouse.address,
+    warehouseId: coverageArea.warehouse.warehouseId,
+    warehouseLabel: coverageArea.warehouse.label,
+  };
+}
+
+function coverageInputFromForm(form: CoverageAreaForm): CoverageAreaInput {
+  return {
+    active: form.active,
+    description: form.description,
+    granularity: {
+      binarySearchIterations: readPositiveInteger(form.binarySearchIterations, 5),
+      sampleBearings: readPositiveInteger(form.sampleBearings, 24),
+    },
+    label: form.label,
+    maxDriveTimeMinutes: readPositiveNumber(form.maxDriveTimeMinutes, 30),
+    schedule: {
+      enabled: form.scheduleEnabled,
+      intervalHours: form.intervalHours.trim() ? readPositiveInteger(form.intervalHours, 24) : null,
+      nextRunAt: form.nextRunAt.trim() || null,
+    },
+    speedMph: readPositiveNumber(form.speedMph, 30),
+    warehouse: {
+      address: form.warehouseAddress,
+      label: form.warehouseLabel,
+      warehouseId: form.warehouseId,
+    },
+  };
+}
+
+function readPositiveNumber(value: string, fallback: number) {
+  const number = Number(value);
+
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function readPositiveInteger(value: string, fallback: number) {
+  return Math.round(readPositiveNumber(value, fallback));
+}
+
+function formatMiles(radiusMeters: number) {
+  if (!radiusMeters) return "n/a";
+
+  return `${(radiusMeters / 1609.344).toFixed(1)} mi`;
 }
 
 function RoutesView({ token }: { token: string }) {
@@ -877,24 +1132,24 @@ function formatAddress(address: Record<string, unknown>) {
 }
 
 function DriverMap({
+  coverageAreas,
   drivers,
-  isochronePlot,
-  showIsochrone,
+  showCoverage,
 }: {
+  coverageAreas: CoverageArea[];
   drivers: DriverMapEntry[];
-  isochronePlot: IsochronePlot | null;
-  showIsochrone: boolean;
+  showCoverage: boolean;
 }) {
   const mapRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
 
-    void renderGoogleDriverMap(node, drivers, showIsochrone ? isochronePlot : null);
-  }, [drivers, isochronePlot, showIsochrone]);
+    void renderGoogleDriverMap(node, drivers, showCoverage ? coverageAreas : []);
+  }, [coverageAreas, drivers, showCoverage]);
   const positioned = drivers.filter((driver) => driver.location) as Array<DriverMapEntry & { location: LatLng }>;
-  const visibleIsochrone = showIsochrone ? isochronePlot : null;
+  const visibleCoverageAreas = showCoverage ? coverageAreas.filter((coverageArea) => coverageArea.polygon.length > 0) : [];
 
-  if (positioned.length === 0 && !visibleIsochrone) {
-    return <EmptyState title="No map geometry">Clocked-in driver locations and the isochrone polygon will appear here.</EmptyState>;
+  if (positioned.length === 0 && visibleCoverageAreas.length === 0) {
+    return <EmptyState title="No map geometry">Clocked-in driver locations and coverage polygons will appear here.</EmptyState>;
   }
 
   if (!hasGoogleMapsBrowserKey()) {
@@ -912,9 +1167,9 @@ function DriverMap({
         <div className="pointer-events-none absolute left-4 top-4 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
           {positioned.length} live
         </div>
-        {visibleIsochrone ? (
+        {visibleCoverageAreas.length > 0 ? (
           <div className="pointer-events-none absolute bottom-4 left-4 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
-            {visibleIsochrone.travelMinutes} min round trip
+            {visibleCoverageAreas.length} coverage {visibleCoverageAreas.length === 1 ? "zone" : "zones"}
           </div>
         ) : null}
       </div>
@@ -922,17 +1177,18 @@ function DriverMap({
   );
 }
 
-async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverMapEntry[], isochronePlot: IsochronePlot | null) {
+async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverMapEntry[], coverageAreas: CoverageArea[]) {
   const maps = await loadGoogleMaps();
   const positioned = drivers.filter((driver) => driver.location) as Array<DriverMapEntry & { location: LatLng }>;
+  const plottedCoverageAreas = coverageAreas.filter((coverageArea) => coverageArea.polygon.length > 0);
 
-  if (positioned.length === 0 && !isochronePlot) {
+  if (positioned.length === 0 && plottedCoverageAreas.length === 0) {
     return;
   }
 
   const center = averageLatLng([
     ...positioned.map((driver) => driver.location),
-    ...(isochronePlot ? [isochronePlot.center] : []),
+    ...plottedCoverageAreas.map((coverageArea) => coverageArea.warehouse.location),
   ]);
   const map = new maps.Map(container, {
     center,
@@ -946,36 +1202,37 @@ async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverM
   const infoWindow = new maps.InfoWindow();
   const DriverLocationOverlay = createDriverLocationOverlay(maps);
 
-  if (isochronePlot) {
-    const polygonPath = isochronePlot.polygon.map((point) => ({ lat: point.lat, lng: point.lng }));
+  plottedCoverageAreas.forEach((coverageArea, index) => {
+    const color = coverageColor(index);
+    const polygonPath = coverageArea.polygon.map((point) => ({ lat: point.lat, lng: point.lng }));
     new maps.Polygon({
       clickable: false,
-      fillColor: "#f26a1b",
-      fillOpacity: 0.16,
+      fillColor: color.fill,
+      fillOpacity: 0.13,
       map,
       paths: polygonPath,
-      strokeColor: "#c94d12",
+      strokeColor: color.stroke,
       strokeOpacity: 0.9,
       strokeWeight: 2,
     });
     polygonPath.forEach((point) => bounds.extend(point));
-    bounds.extend({ lat: isochronePlot.center.lat, lng: isochronePlot.center.lng });
+    bounds.extend({ lat: coverageArea.warehouse.location.lat, lng: coverageArea.warehouse.location.lng });
 
     new maps.Marker({
       icon: {
         anchor: new maps.Point(8, 8),
         path: maps.SymbolPath.CIRCLE,
-        fillColor: "#111111",
+        fillColor: color.stroke,
         fillOpacity: 1,
         scale: 6,
         strokeColor: "#ffffff",
         strokeWeight: 3,
       },
       map,
-      position: { lat: isochronePlot.center.lat, lng: isochronePlot.center.lng },
-      title: isochronePlot.center.address || "Isochrone origin",
+      position: { lat: coverageArea.warehouse.location.lat, lng: coverageArea.warehouse.location.lng },
+      title: coverageArea.label,
     });
-  }
+  });
 
   positioned.forEach((driver) => {
     const position = { lat: driver.location.lat, lng: driver.location.lng };
@@ -1003,7 +1260,7 @@ async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverM
     bounds.extend(position);
   });
 
-  if (positioned.length > 1 || isochronePlot) {
+  if (positioned.length > 1 || plottedCoverageAreas.length > 0) {
     map.fitBounds(bounds, 72);
   }
 }
@@ -1090,6 +1347,17 @@ function escapeHtml(value: string) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll("\"", "&quot;");
+}
+
+function coverageColor(index: number) {
+  const colors = [
+    { fill: "#f26a1b", stroke: "#c94d12" },
+    { fill: "#2563eb", stroke: "#1d4ed8" },
+    { fill: "#2f8f46", stroke: "#1f6631" },
+    { fill: "#d9961d", stroke: "#855b0e" },
+  ];
+
+  return colors[index % colors.length];
 }
 
 function RoutePlot({ points }: { points: LatLng[] }) {
@@ -1344,14 +1612,6 @@ function readNumber(...values: unknown[]): number | null {
   }
 
   return null;
-}
-
-function clampNumber(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function formatHours(value: number) {
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
 }
 
 function formatDate(value: unknown) {

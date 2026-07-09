@@ -4,6 +4,8 @@ import type {
   AccountRole,
   AdminPromoCode,
   AdminPromoCodeType,
+  CoverageArea,
+  CoverageAreaInput,
   DriverMapEntry,
   DriverRoute,
   IsochronePlot,
@@ -155,6 +157,47 @@ export function createIsochrone(token: string, input: {
 }) {
   return request<{ plot: IsochronePlot }>("/v1/admin/isochrones", {
     body: input,
+    method: "POST",
+    token,
+  });
+}
+
+export function loadCoverageAreas(token: string) {
+  return request<{ coverageAreas: CoverageArea[] }>("/v1/admin/coverage-areas", { token });
+}
+
+export function createCoverageArea(token: string, input: CoverageAreaInput) {
+  return request<{ coverageArea: CoverageArea }>("/v1/admin/coverage-areas", {
+    body: input,
+    method: "POST",
+    token,
+  });
+}
+
+export function updateCoverageArea(token: string, coverageAreaId: string, input: CoverageAreaInput) {
+  return request<{ coverageArea: CoverageArea }>(`/v1/admin/coverage-areas/${encodeURIComponent(coverageAreaId)}`, {
+    body: input,
+    method: "PATCH",
+    token,
+  });
+}
+
+export function deleteCoverageArea(token: string, coverageAreaId: string) {
+  return request<{ ok: true }>(`/v1/admin/coverage-areas/${encodeURIComponent(coverageAreaId)}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export function regenerateCoverageArea(token: string, coverageAreaId: string) {
+  return request<{ coverageArea: CoverageArea }>(`/v1/admin/coverage-areas/${encodeURIComponent(coverageAreaId)}/regenerate`, {
+    method: "POST",
+    token,
+  });
+}
+
+export function regenerateDueCoverageAreas(token: string) {
+  return request<{ failed: Array<{ id: string; message: string }>; regenerated: CoverageArea[] }>("/v1/admin/coverage-areas/regenerate-due", {
     method: "POST",
     token,
   });

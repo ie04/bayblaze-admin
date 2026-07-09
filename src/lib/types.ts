@@ -60,6 +60,62 @@ export type IsochronePlot = {
   travelMinutes: number;
 };
 
+export type CoverageArea = {
+  active: boolean;
+  algorithmVersion: string;
+  createdAt: string;
+  description: string;
+  granularity: {
+    binarySearchIterations: number;
+    sampleBearings: number;
+  };
+  id: string;
+  label: string;
+  lastGeneratedAt: string;
+  lastGenerationError: string;
+  maxDriveTimeMinutes: number;
+  polygon: LatLng[];
+  radiusMeters: number;
+  schedule: {
+    enabled: boolean;
+    intervalHours: number | null;
+    nextRunAt: string | null;
+  };
+  speedMph: number;
+  updatedAt: string;
+  warehouse: {
+    address: string;
+    label: string;
+    location: LatLng;
+    warehouseId: string;
+  };
+};
+
+export type CoverageAreaInput = {
+  active?: boolean;
+  description?: string;
+  granularity?: {
+    binarySearchIterations?: number;
+    sampleBearings?: number;
+  };
+  label?: string;
+  maxDriveTimeMinutes?: number;
+  regenerate?: boolean;
+  schedule?: {
+    enabled?: boolean;
+    intervalHours?: number | null;
+    nextRunAt?: string | null;
+  };
+  speedMph?: number;
+  warehouse?: {
+    address?: string;
+    label?: string;
+    lat?: number;
+    lng?: number;
+    warehouseId?: string;
+  };
+};
+
 export type AdminPromoCodeType = "discount" | "bogo";
 
 export type AdminPromoCode = {

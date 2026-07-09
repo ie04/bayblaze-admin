@@ -54,6 +54,12 @@ PATCH /v1/admin/accounts/:uid
 GET   /v1/admin/drivers/map
 GET   /v1/admin/drivers/routes
 POST  /v1/admin/isochrones
+GET   /v1/admin/coverage-areas
+POST  /v1/admin/coverage-areas
+PATCH /v1/admin/coverage-areas/:coverageAreaId
+DELETE /v1/admin/coverage-areas/:coverageAreaId
+POST  /v1/admin/coverage-areas/:coverageAreaId/regenerate
+POST  /v1/admin/coverage-areas/regenerate-due
 GET   /v1/admin/promo-codes
 POST  /v1/admin/promo-codes
 PATCH /v1/admin/promo-codes/:code
@@ -89,9 +95,13 @@ write account docs from the dashboard.
 - Toggle account-level age verification bypass for testing.
 - View drivers on a Google Maps JavaScript map widget using API-provided live
   location snapshots.
-- Show or hide the API-generated WH1 round-trip isochrone polygon directly on
-  the Driver Map, adjust the round-trip drive time in hours, and recalculate it
-  from the Driver Map controls.
+- Use the Map page to show live drivers and manage API-owned coverage areas.
+  Coverage areas are bidirectional drive-time isochrone polygons centered on a
+  warehouse point, with label, optional description, max one-way drive minutes,
+  polygon granularity, active state, and optional regeneration schedule
+  metadata.
+- Create, edit, delete, show/hide, manually regenerate, and process due
+  scheduled regeneration for coverage areas through `bayblaze-api`.
 - View driver delivery route stop geometry.
 - View live Medusa orders and order details through `bayblaze-api`.
 - Create, update, delete, collapse, and generate QR assets for admin-owned
@@ -100,15 +110,12 @@ write account docs from the dashboard.
   card state is only a local dashboard organization preference.
   The storefront no longer hosts an internal promo QR generator route.
 
-The dashboard renders route plots from API data and draws the isochrone polygon
-inside the live driver Google Map. The live driver map is the one browser Google
-Maps integration and must use a restricted public browser key, never the
-server-side Google Maps key.
-The Driver Map requests an adjustable round-trip isochrone from WH1 through
-`POST /v1/admin/isochrones`; the slider uses 15-minute increments, the number
-input accepts arbitrary hour increments up to 3 hours round trip, normal
-slider-driven map loads may use API cache, and the Recalculate button sends
-`force: true`.
+The dashboard renders route plots from API data and draws active coverage
+polygons inside the Map page's Google Map. The live map is the one browser
+Google Maps integration and must use a restricted public browser key, never the
+server-side Google Maps key. The legacy `POST /v1/admin/isochrones` route may
+exist as a backend compatibility preview, but the admin UI should manage
+persistent coverage through `/v1/admin/coverage-areas`.
 
 ## Deployment Assumptions
 
