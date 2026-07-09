@@ -756,8 +756,8 @@ function CoverageAreaFormFields({
       <Input label="Warehouse Address" onChange={(event) => onChange("warehouseAddress", event.target.value)} value={form.warehouseAddress} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Input label="Max Drive Minutes" min="1" onChange={(event) => onChange("maxDriveTimeMinutes", event.target.value)} type="number" value={form.maxDriveTimeMinutes} />
-        <Input label="Polygon Points" min="8" onChange={(event) => onChange("sampleBearings", event.target.value)} type="number" value={form.sampleBearings} />
-        <Input label="Street Detail" min="3" onChange={(event) => onChange("binarySearchIterations", event.target.value)} type="number" value={form.binarySearchIterations} />
+        <Input label="Polygon Points" max="144" min="8" onChange={(event) => onChange("sampleBearings", event.target.value)} type="number" value={form.sampleBearings} />
+        <Input label="Street Detail" max="10" min="3" onChange={(event) => onChange("binarySearchIterations", event.target.value)} type="number" value={form.binarySearchIterations} />
       </div>
       <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-3 text-sm font-black">
         <input
@@ -854,8 +854,8 @@ function coverageInputFromForm(form: CoverageAreaForm): CoverageAreaInput {
     active: form.active,
     description: form.description,
     granularity: {
-      binarySearchIterations: readPositiveInteger(form.binarySearchIterations, 5),
-      sampleBearings: readPositiveInteger(form.sampleBearings, 24),
+      binarySearchIterations: readBoundedInteger(form.binarySearchIterations, 5, 3, 10),
+      sampleBearings: readBoundedInteger(form.sampleBearings, 24, 8, 144),
     },
     label: form.label,
     maxDriveTimeMinutes: readPositiveNumber(form.maxDriveTimeMinutes, 30),
@@ -880,6 +880,10 @@ function readPositiveNumber(value: string, fallback: number) {
 
 function readPositiveInteger(value: string, fallback: number) {
   return Math.round(readPositiveNumber(value, fallback));
+}
+
+function readBoundedInteger(value: string, fallback: number, min: number, max: number) {
+  return Math.min(Math.max(readPositiveInteger(value, fallback), min), max);
 }
 
 function formatMiles(radiusMeters: number) {
