@@ -1025,6 +1025,7 @@ function OrdersView({ token }: { token: string }) {
 
   const activeOrders = orders.filter((order) => !isDeletedOrder(order));
   const deletedOrders = orders.filter(isDeletedOrder);
+  const selectedOrderSummary = selectedOrder ? readOrderDetail(selectedOrder) as MedusaOrder : null;
 
   return (
     <div className="space-y-4">
@@ -1086,9 +1087,17 @@ function OrdersView({ token }: { token: string }) {
           ) : null}
         </div>
         <Card className="h-fit space-y-3 xl:sticky xl:top-24">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-black">Order Details</h3>
-            {detailLoading ? <RefreshCw className="size-5 animate-spin text-[var(--bb-muted)]" aria-hidden="true" /> : null}
+            <div className="flex items-center gap-2">
+              {selectedOrderSummary && !isDeletedOrder(selectedOrderSummary) ? (
+                <Button onClick={() => setDeleteTargetOrder(selectedOrderSummary)} size="sm" variant="danger">
+                  <Trash2 size={16} aria-hidden="true" />
+                  Delete
+                </Button>
+              ) : null}
+              {detailLoading ? <RefreshCw className="size-5 animate-spin text-[var(--bb-muted)]" aria-hidden="true" /> : null}
+            </div>
           </div>
           {selectedOrder ? (
             <OrderDetailSummary detail={selectedOrder} />
@@ -1124,19 +1133,6 @@ function OrderCard({
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <Badge tone={orderStatus.tone}>{orderStatus.label}</Badge>
-          {!deleted ? (
-            <Button
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete();
-              }}
-              size="sm"
-              variant="danger"
-            >
-              <Trash2 size={16} aria-hidden="true" />
-              Delete
-            </Button>
-          ) : null}
         </div>
       </div>
       {orderStatus.cancelled && cancellationReason ? (
@@ -1149,6 +1145,21 @@ function OrderCard({
         <Metric label="Total" value={formatOrderTotal(order)} />
         <Metric label="Created" value={formatDate(order.created_at)} />
       </div>
+      {!deleted ? (
+        <div className="mt-3 border-t border-[var(--bb-line)] pt-3">
+          <Button
+            fullWidth
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+            variant="danger"
+          >
+            <Trash2 size={18} aria-hidden="true" />
+            Delete Order
+          </Button>
+        </div>
+      ) : null}
     </Card>
   );
 }
