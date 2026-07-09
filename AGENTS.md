@@ -66,6 +66,7 @@ PATCH /v1/admin/promo-codes/:code
 DELETE /v1/admin/promo-codes/:code
 GET   /v1/admin/orders
 GET   /v1/admin/orders/:orderId
+DELETE /v1/admin/orders/:orderId
 ```
 
 `/v1/admin/*` routes require a BayBlaze account session bearer token from an
@@ -104,6 +105,11 @@ write account docs from the dashboard.
   scheduled regeneration for coverage areas through `bayblaze-api`.
 - View driver delivery route stop geometry.
 - View live Medusa orders and order details through `bayblaze-api`.
+- Delete orders from the Orders screen through `bayblaze-api`. Deleting an
+  order asks whether to release products back to stock; choosing yes restores
+  the ordered variant quantities before the backend marks the order deleted.
+  Deleted orders stay visible with a grey `DELETED` pill and are hidden inside
+  the collapsed Deleted dropdown below active orders.
 - Create, update, delete, collapse, and generate QR assets for admin-owned
   checkout promo codes in the Admin Promo section. Admin-created promos are
   persisted by `bayblaze-api` as `admin_promo` discount records; hidden/open

@@ -28,6 +28,7 @@ import {
   completeAdminGoogleLogin,
   createCoverageArea,
   deleteCoverageArea,
+  deleteOrder,
   loadDriverMap,
   loadDriverRoutes,
   loadCoverageAreas,
@@ -51,8 +52,9 @@ import { PromoToolsView } from "./PromoToolsView";
 type View = "accounts" | "map" | "routes" | "orders" | "promo";
 type OrderStatusDisplay = {
   cancelled: boolean;
-  label: "FULFILLED" | "CANCELLED";
-  tone: "success" | "danger";
+  deleted: boolean;
+  label: "FULFILLED" | "CANCELLED" | "DELETED";
+  tone: "success" | "danger" | "neutral";
 };
 
 const views: Array<{ id: View; icon: ReactNode; label: string }> = [
@@ -957,6 +959,9 @@ function RoutesView({ token }: { token: string }) {
 function OrdersView({ token }: { token: string }) {
   const [orders, setOrders] = useState<MedusaOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Record<string, unknown> | null>(null);
+  const [deleteTargetOrder, setDeleteTargetOrder] = useState<MedusaOrder | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [showDeletedOrders, setShowDeletedOrders] = useState(false);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
@@ -988,6 +993,27 @@ function OrdersView({ token }: { token: string }) {
     }
   }
 
+  async function confirmDeleteOrder(releaseStock: boolean) {
+    if (!deleteTargetOrder?.id) return;
+
+    const orderId = String(deleteTargetOrder.id);
+    setDeletingOrderId(orderId);
+    setError("");
+    try {
+      await deleteOrder(token, orderId, { releaseStock });
+      setDeleteTargetOrder(null);
+      setShowDeletedOrders(true);
+      if (selectedOrder && String(readOrderDetail(selectedOrder).id || "") === orderId) {
+        setSelectedOrder(null);
+      }
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Order delete failed.");
+    } finally {
+      setDeletingOrderId(null);
+    }
+  }
+
   useEffect(() => {
     const initialTimer = window.setTimeout(() => void refresh(), 0);
     const timer = window.setInterval(() => void refresh(), 15_000);
@@ -996,6 +1022,9 @@ function OrdersView({ token }: { token: string }) {
       window.clearInterval(timer);
     };
   }, [refresh]);
+
+  const activeOrders = orders.filter((order) => !isDeletedOrder(order));
+  const deletedOrders = orders.filter(isDeletedOrder);
 
   return (
     <div className="space-y-4">
@@ -1007,35 +1036,54 @@ function OrdersView({ token }: { token: string }) {
       />
       {error ? <ErrorState>{error}</ErrorState> : null}
       {loading ? <LoadingState label="Loading orders" /> : null}
+      {deleteTargetOrder ? (
+        <OrderDeleteDialog
+          deleting={deletingOrderId === String(deleteTargetOrder.id || "")}
+          order={deleteTargetOrder}
+          onCancel={() => setDeleteTargetOrder(null)}
+          onDeleteOnly={() => void confirmDeleteOrder(false)}
+          onReleaseAndDelete={() => void confirmDeleteOrder(true)}
+        />
+      ) : null}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="grid gap-3">
           {!loading && orders.length === 0 ? <EmptyState>No orders returned.</EmptyState> : null}
-          {orders.map((order, index) => {
-            const orderStatus = getOrderStatusDisplay(order);
-            const cancellationReason = getCancellationReason(order);
-
-            return (
-              <Card key={String(order.id || index)} className="cursor-pointer transition hover:border-[var(--bb-blaze)]" onClick={() => void openOrder(order)}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-lg font-black">{readOrderLabel(order)}</h3>
-                    <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{order.email || "No customer email"}</p>
-                  </div>
-                  <Badge tone={orderStatus.tone}>{orderStatus.label}</Badge>
+          {activeOrders.map((order, index) => (
+            <OrderCard
+              key={String(order.id || index)}
+              onDelete={() => setDeleteTargetOrder(order)}
+              onOpen={() => void openOrder(order)}
+              order={order}
+            />
+          ))}
+          {deletedOrders.length > 0 ? (
+            <section className="rounded-[20px] border border-[var(--bb-line)] bg-white shadow-[var(--bb-shadow-soft)]">
+              <button
+                className="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left font-black"
+                onClick={() => setShowDeletedOrders((current) => !current)}
+                type="button"
+              >
+                <span>Deleted</span>
+                <span className="inline-flex items-center gap-2 text-sm text-[var(--bb-muted)]">
+                  {deletedOrders.length}
+                  {showDeletedOrders ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
+                </span>
+              </button>
+              {showDeletedOrders ? (
+                <div className="grid gap-3 border-t border-[var(--bb-line)] p-3">
+                  {deletedOrders.map((order, index) => (
+                    <OrderCard
+                      deleted
+                      key={String(order.id || index)}
+                      onDelete={() => undefined}
+                      onOpen={() => void openOrder(order)}
+                      order={order}
+                    />
+                  ))}
                 </div>
-                {orderStatus.cancelled && cancellationReason ? (
-                  <p className="mt-3 rounded-2xl border border-[var(--bb-danger-soft)] bg-[var(--bb-danger-soft)] px-3 py-2 text-sm font-bold text-[var(--bb-danger-strong)]">
-                    Cancellation reason: {cancellationReason}
-                  </p>
-                ) : null}
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  <Metric label="Payment" value={getPaymentMethodDisplay(order)} />
-                  <Metric label="Total" value={formatOrderTotal(order)} />
-                  <Metric label="Created" value={formatDate(order.created_at)} />
-                </div>
-              </Card>
-            );
-          })}
+              ) : null}
+            </section>
+          ) : null}
         </div>
         <Card className="h-fit space-y-3 xl:sticky xl:top-24">
           <div className="flex items-center justify-between">
@@ -1049,6 +1097,103 @@ function OrdersView({ token }: { token: string }) {
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+function OrderCard({
+  deleted = false,
+  onDelete,
+  onOpen,
+  order,
+}: {
+  deleted?: boolean;
+  onDelete: () => void;
+  onOpen: () => void;
+  order: MedusaOrder;
+}) {
+  const orderStatus = getOrderStatusDisplay(order);
+  const cancellationReason = getCancellationReason(order);
+
+  return (
+    <Card className="cursor-pointer transition hover:border-[var(--bb-blaze)]" onClick={onOpen}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-lg font-black">{readOrderLabel(order)}</h3>
+          <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{order.email || "No customer email"}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Badge tone={orderStatus.tone}>{orderStatus.label}</Badge>
+          {!deleted ? (
+            <Button
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete();
+              }}
+              size="sm"
+              variant="danger"
+            >
+              <Trash2 size={16} aria-hidden="true" />
+              Delete
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      {orderStatus.cancelled && cancellationReason ? (
+        <p className="mt-3 rounded-2xl border border-[var(--bb-danger-soft)] bg-[var(--bb-danger-soft)] px-3 py-2 text-sm font-bold text-[var(--bb-danger-strong)]">
+          Cancellation reason: {cancellationReason}
+        </p>
+      ) : null}
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <Metric label="Payment" value={getPaymentMethodDisplay(order)} />
+        <Metric label="Total" value={formatOrderTotal(order)} />
+        <Metric label="Created" value={formatDate(order.created_at)} />
+      </div>
+    </Card>
+  );
+}
+
+function OrderDeleteDialog({
+  deleting,
+  onCancel,
+  onDeleteOnly,
+  onReleaseAndDelete,
+  order,
+}: {
+  deleting: boolean;
+  onCancel: () => void;
+  onDeleteOnly: () => void;
+  onReleaseAndDelete: () => void;
+  order: MedusaOrder;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/35 p-3 backdrop-blur-sm sm:place-items-center sm:p-6">
+      <section className="w-full max-w-lg rounded-[20px] border border-[var(--bb-line)] bg-white p-4 shadow-[var(--bb-shadow-card)] md:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-black">Delete Order</h3>
+            <p className="mt-1 text-sm font-semibold text-[var(--bb-muted)]">{readOrderLabel(order)}</p>
+          </div>
+          <Button aria-label="Cancel delete" onClick={onCancel} size="icon" variant="ghost">
+            <X size={18} aria-hidden="true" />
+          </Button>
+        </div>
+        <p className="mt-4 text-sm font-semibold leading-6 text-[var(--bb-muted)]">
+          Would you like to release the products back to stock before marking this order deleted?
+        </p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <Button loading={deleting} onClick={onReleaseAndDelete}>
+            <Check size={18} aria-hidden="true" />
+            Yes
+          </Button>
+          <Button disabled={deleting} onClick={onDeleteOnly} variant="secondary">
+            No
+          </Button>
+          <Button disabled={deleting} onClick={onCancel} variant="ghost">
+            Cancel
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1496,11 +1641,31 @@ function readOrderLabel(order: MedusaOrder) {
 }
 
 function getOrderStatusDisplay(order: Record<string, unknown>): OrderStatusDisplay {
+  const deleted = isDeletedOrder(order);
+  if (deleted) {
+    return { cancelled: false, deleted, label: "DELETED", tone: "neutral" };
+  }
+
   const cancelled = isCancelledOrder(order);
 
   return cancelled
-    ? { cancelled, label: "CANCELLED", tone: "danger" }
-    : { cancelled, label: "FULFILLED", tone: "success" };
+    ? { cancelled, deleted, label: "CANCELLED", tone: "danger" }
+    : { cancelled, deleted, label: "FULFILLED", tone: "success" };
+}
+
+function isDeletedOrder(order: Record<string, unknown>) {
+  const metadata = readRecord(order.metadata);
+  const statusValues = [
+    order.status,
+    order.fulfillment_status,
+    metadata.bayblaze_order_status,
+    metadata.order_status,
+  ].map(normalizeStatus);
+
+  return metadata.bayblaze_deleted === true ||
+    metadata.deleted === true ||
+    statusValues.some((value) => value === "deleted") ||
+    Boolean(readText(metadata.bayblaze_deleted_at, metadata.deleted_at));
 }
 
 function isCancelledOrder(order: Record<string, unknown>) {

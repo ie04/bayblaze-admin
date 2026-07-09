@@ -204,13 +204,27 @@ export function regenerateDueCoverageAreas(token: string) {
 }
 
 export async function loadOrders(token: string) {
-  const payload = await request<Record<string, unknown>>("/v1/admin/orders?limit=25&order=-created_at", { token });
+  const payload = await request<Record<string, unknown>>("/v1/admin/orders?limit=100&order=-created_at", { token });
   const orders = readOrderArray(payload);
   return { orders, raw: payload };
 }
 
 export function loadOrderDetail(token: string, orderId: string) {
   return request<Record<string, unknown>>(`/v1/admin/orders/${encodeURIComponent(orderId)}`, { token });
+}
+
+export function deleteOrder(token: string, orderId: string, input: { releaseStock: boolean }) {
+  return request<{
+    deleted: true;
+    orderId: string;
+    orderReference?: string;
+    releasedItems?: Array<{ nextQuantity: number; quantity: number; variantId: string }>;
+    releasedStock: boolean;
+  }>(`/v1/admin/orders/${encodeURIComponent(orderId)}`, {
+    body: input,
+    method: "DELETE",
+    token,
+  });
 }
 
 export function loadPromoCodes(token: string) {
