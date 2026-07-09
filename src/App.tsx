@@ -10,6 +10,7 @@ import {
   LogOut,
   MapPinned,
   Mail,
+  Pencil,
   Plus,
   QrCode,
   RefreshCw,
@@ -19,6 +20,7 @@ import {
   ShieldCheck,
   Trash2,
   UserCog,
+  X,
 } from "lucide-react";
 
 import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader, Textarea } from "./components/ui";
@@ -484,6 +486,7 @@ function MapView({ token }: { token: string }) {
   const [coverageAreas, setCoverageAreas] = useState<CoverageArea[]>([]);
   const [selectedCoverageAreaId, setSelectedCoverageAreaId] = useState<string | null>(null);
   const [coverageForm, setCoverageForm] = useState<CoverageAreaForm>(defaultCoverageForm);
+  const [coverageEditorOpen, setCoverageEditorOpen] = useState(false);
   const [showCoverage, setShowCoverage] = useState(true);
   const [loading, setLoading] = useState(true);
   const [coverageLoading, setCoverageLoading] = useState(false);
@@ -526,9 +529,10 @@ function MapView({ token }: { token: string }) {
     setCoverageForm((current) => ({ ...current, [field]: value }));
   }
 
-  function selectCoverageArea(coverageArea: CoverageArea) {
-    setSelectedCoverageAreaId(coverageArea.id);
-    setCoverageForm(formFromCoverageArea(coverageArea));
+  function openCoverageEditor(coverageArea: CoverageArea | null) {
+    setSelectedCoverageAreaId(coverageArea?.id ?? null);
+    setCoverageForm(coverageArea ? formFromCoverageArea(coverageArea) : defaultCoverageForm);
+    setCoverageEditorOpen(true);
   }
 
   async function saveCoverageArea() {
@@ -541,6 +545,7 @@ function MapView({ token }: { token: string }) {
         : await createCoverageArea(token, input);
       await refresh(payload.coverageArea.id);
       setSelectedCoverageAreaId(payload.coverageArea.id);
+      setCoverageEditorOpen(false);
       setShowCoverage(true);
     } catch (caught) {
       setCoverageError(caught instanceof Error ? caught.message : "Coverage area save failed.");
@@ -591,6 +596,7 @@ function MapView({ token }: { token: string }) {
       await deleteCoverageArea(token, selectedCoverageArea.id);
       setSelectedCoverageAreaId(null);
       setCoverageForm(defaultCoverageForm);
+      setCoverageEditorOpen(false);
       await refresh(null);
     } catch (caught) {
       setCoverageError(caught instanceof Error ? caught.message : "Coverage area delete failed.");
@@ -599,22 +605,11 @@ function MapView({ token }: { token: string }) {
     }
   }
 
-  const visibleCoverageAreas = showCoverage ? coverageAreas.filter((coverageArea) => coverageArea.active) : [];
-
   return (
     <div className="space-y-4">
       <PageHeader
         actions={
           <div className="grid w-full gap-2 sm:grid-cols-3 lg:w-[34rem]">
-            <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-[var(--bb-line)] bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
-              <input
-                checked={showCoverage}
-                className="size-4 accent-[var(--bb-blaze)]"
-                onChange={(event) => setShowCoverage(event.target.checked)}
-                type="checkbox"
-              />
-              Coverage
-            </label>
             <Button loading={coverageLoading} onClick={() => void regenerateDueCoverage()} variant="secondary">
               <Clock size={18} aria-hidden="true" />
               Due
@@ -632,9 +627,14 @@ function MapView({ token }: { token: string }) {
       {error ? <ErrorState>{error}</ErrorState> : null}
       {coverageError ? <ErrorState>{coverageError}</ErrorState> : null}
       {loading ? <LoadingState label="Loading map" /> : (
-        <DriverMap coverageAreas={visibleCoverageAreas} drivers={drivers} showCoverage={showCoverage} />
+        <DriverMap
+          coverageAreas={coverageAreas.filter((coverageArea) => coverageArea.active)}
+          drivers={drivers}
+          onShowCoverageChange={setShowCoverage}
+          showCoverage={showCoverage}
+        />
       )}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="grid gap-4">
         <Card className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -642,10 +642,7 @@ function MapView({ token }: { token: string }) {
               <p className="text-sm font-semibold text-[var(--bb-muted)]">{coverageAreas.length} configured zones</p>
             </div>
             <Button
-              onClick={() => {
-                setSelectedCoverageAreaId(null);
-                setCoverageForm(defaultCoverageForm);
-              }}
+              onClick={() => openCoverageEditor(null)}
               variant="secondary"
             >
               <Plus size={18} aria-hidden="true" />
@@ -655,14 +652,12 @@ function MapView({ token }: { token: string }) {
           {coverageAreas.length === 0 ? <EmptyState title="No coverage areas">Create the first delivery zone.</EmptyState> : null}
           <div className="grid gap-3 lg:grid-cols-2">
             {coverageAreas.map((coverageArea) => (
-              <button
+              <section
                 key={coverageArea.id}
                 className={cx(
                   "rounded-2xl border bg-[var(--bb-surface-warm)] p-3 text-left transition",
-                  selectedCoverageAreaId === coverageArea.id ? "border-[var(--bb-blaze)]" : "border-[var(--bb-line)] hover:border-[var(--bb-blaze)]",
+                  selectedCoverageAreaId === coverageArea.id && coverageEditorOpen ? "border-[var(--bb-blaze)]" : "border-[var(--bb-line)]",
                 )}
-                onClick={() => selectCoverageArea(coverageArea)}
-                type="button"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -681,43 +676,39 @@ function MapView({ token }: { token: string }) {
                     {coverageArea.lastGenerationError}
                   </p>
                 ) : null}
-              </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button onClick={() => openCoverageEditor(coverageArea)} size="sm" variant="secondary">
+                    <Pencil size={16} aria-hidden="true" />
+                    Edit
+                  </Button>
+                  <Button
+                    loading={regeneratingId === coverageArea.id}
+                    onClick={() => void regenerateSelectedCoverageArea(coverageArea.id)}
+                    size="sm"
+                    variant="quiet"
+                  >
+                    <RefreshCw size={16} aria-hidden="true" />
+                    Regenerate
+                  </Button>
+                </div>
+              </section>
             ))}
           </div>
         </Card>
-
-        <Card className="h-fit space-y-4 xl:sticky xl:top-24">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-black">{selectedCoverageArea ? "Edit Coverage" : "Create Coverage"}</h3>
-              <p className="text-sm font-semibold text-[var(--bb-muted)]">
-                {selectedCoverageArea ? selectedCoverageArea.id : "New zone"}
-              </p>
-            </div>
-            <Badge tone={coverageForm.active ? "success" : "neutral"}>{coverageForm.active ? "Active" : "Off"}</Badge>
-          </div>
-          <CoverageAreaFormFields form={coverageForm} onChange={updateCoverageForm} />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button loading={coverageLoading} onClick={() => void saveCoverageArea()}>
-              <Save size={18} aria-hidden="true" />
-              Save
-            </Button>
-            <Button
-              disabled={!selectedCoverageArea}
-              loading={regeneratingId === selectedCoverageArea?.id}
-              onClick={() => selectedCoverageArea ? void regenerateSelectedCoverageArea(selectedCoverageArea.id) : undefined}
-              variant="secondary"
-            >
-              <RefreshCw size={18} aria-hidden="true" />
-              Regenerate
-            </Button>
-            <Button disabled={!selectedCoverageArea} onClick={() => void removeSelectedCoverageArea()} variant="danger">
-              <Trash2 size={18} aria-hidden="true" />
-              Delete
-            </Button>
-          </div>
-        </Card>
       </div>
+      {coverageEditorOpen ? (
+        <CoverageEditorDialog
+          coverageArea={selectedCoverageArea}
+          form={coverageForm}
+          loading={coverageLoading}
+          onChange={updateCoverageForm}
+          onClose={() => setCoverageEditorOpen(false)}
+          onDelete={() => void removeSelectedCoverageArea()}
+          onRegenerate={() => selectedCoverageArea ? void regenerateSelectedCoverageArea(selectedCoverageArea.id) : undefined}
+          onSave={() => void saveCoverageArea()}
+          regenerating={regeneratingId === selectedCoverageArea?.id}
+        />
+      ) : null}
       <div className="grid gap-3 lg:grid-cols-3">
         {drivers.map((driver) => (
           <Card key={driver.uid} className="space-y-3">
@@ -782,6 +773,62 @@ function CoverageAreaFormFields({
         <Input label="Interval Hours" min="1" onChange={(event) => onChange("intervalHours", event.target.value)} type="number" value={form.intervalHours} />
         <Input label="Next Run ISO" onChange={(event) => onChange("nextRunAt", event.target.value)} placeholder="2026-07-09T20:00:00Z" value={form.nextRunAt} />
       </div>
+    </div>
+  );
+}
+
+function CoverageEditorDialog({
+  coverageArea,
+  form,
+  loading,
+  onChange,
+  onClose,
+  onDelete,
+  onRegenerate,
+  onSave,
+  regenerating,
+}: {
+  coverageArea: CoverageArea | null;
+  form: CoverageAreaForm;
+  loading: boolean;
+  onChange: (field: keyof CoverageAreaForm, value: string | boolean) => void;
+  onClose: () => void;
+  onDelete: () => void;
+  onRegenerate: () => void;
+  onSave: () => void;
+  regenerating: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/35 p-3 backdrop-blur-sm sm:place-items-center sm:p-6">
+      <section className="max-h-[calc(100svh-2rem)] w-full max-w-2xl overflow-auto rounded-[20px] border border-[var(--bb-line)] bg-white p-4 shadow-[var(--bb-shadow-card)] md:p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-xl font-black">{coverageArea ? "Edit Coverage" : "Create Coverage"}</h3>
+            <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{coverageArea ? coverageArea.id : "New zone"}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge tone={form.active ? "success" : "neutral"}>{form.active ? "Active" : "Off"}</Badge>
+            <Button aria-label="Close coverage editor" onClick={onClose} size="icon" variant="ghost">
+              <X size={18} aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+        <CoverageAreaFormFields form={form} onChange={onChange} />
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <Button loading={loading} onClick={onSave}>
+            <Save size={18} aria-hidden="true" />
+            Save
+          </Button>
+          <Button disabled={!coverageArea} loading={regenerating} onClick={onRegenerate} variant="secondary">
+            <RefreshCw size={18} aria-hidden="true" />
+            Regenerate
+          </Button>
+          <Button disabled={!coverageArea} onClick={onDelete} variant="danger">
+            <Trash2 size={18} aria-hidden="true" />
+            Delete
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1134,21 +1181,24 @@ function formatAddress(address: Record<string, unknown>) {
 function DriverMap({
   coverageAreas,
   drivers,
+  onShowCoverageChange,
   showCoverage,
 }: {
   coverageAreas: CoverageArea[];
   drivers: DriverMapEntry[];
+  onShowCoverageChange: (show: boolean) => void;
   showCoverage: boolean;
 }) {
   const mapRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
 
-    void renderGoogleDriverMap(node, drivers, showCoverage ? coverageAreas : []);
+    void renderGoogleDriverMap(node, drivers, coverageAreas, showCoverage);
   }, [coverageAreas, drivers, showCoverage]);
   const positioned = drivers.filter((driver) => driver.location) as Array<DriverMapEntry & { location: LatLng }>;
-  const visibleCoverageAreas = showCoverage ? coverageAreas.filter((coverageArea) => coverageArea.polygon.length > 0) : [];
+  const generatedCoverageAreas = coverageAreas.filter((coverageArea) => coverageArea.polygon.length > 0);
+  const visibleCoverageAreas = showCoverage ? generatedCoverageAreas : [];
 
-  if (positioned.length === 0 && visibleCoverageAreas.length === 0) {
+  if (positioned.length === 0 && coverageAreas.length === 0) {
     return <EmptyState title="No map geometry">Clocked-in driver locations and coverage polygons will appear here.</EmptyState>;
   }
 
@@ -1167,9 +1217,18 @@ function DriverMap({
         <div className="pointer-events-none absolute left-4 top-4 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
           {positioned.length} live
         </div>
-        {visibleCoverageAreas.length > 0 ? (
+        <label className="absolute right-4 top-4 flex min-h-11 items-center gap-2 rounded-2xl bg-white px-3 text-sm font-black shadow-[var(--bb-shadow-soft)]">
+          <input
+            checked={showCoverage}
+            className="size-4 accent-[var(--bb-blaze)]"
+            onChange={(event) => onShowCoverageChange(event.target.checked)}
+            type="checkbox"
+          />
+          Coverage
+        </label>
+        {generatedCoverageAreas.length > 0 ? (
           <div className="pointer-events-none absolute bottom-4 left-4 rounded-2xl bg-white px-3 py-2 text-sm font-black shadow-[var(--bb-shadow-soft)]">
-            {visibleCoverageAreas.length} coverage {visibleCoverageAreas.length === 1 ? "zone" : "zones"}
+            {showCoverage ? visibleCoverageAreas.length : 0} / {generatedCoverageAreas.length} coverage {generatedCoverageAreas.length === 1 ? "zone" : "zones"}
           </div>
         ) : null}
       </div>
@@ -1177,18 +1236,24 @@ function DriverMap({
   );
 }
 
-async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverMapEntry[], coverageAreas: CoverageArea[]) {
+async function renderGoogleDriverMap(
+  container: HTMLDivElement,
+  drivers: DriverMapEntry[],
+  coverageAreas: CoverageArea[],
+  showCoverage: boolean,
+) {
   const maps = await loadGoogleMaps();
   const positioned = drivers.filter((driver) => driver.location) as Array<DriverMapEntry & { location: LatLng }>;
-  const plottedCoverageAreas = coverageAreas.filter((coverageArea) => coverageArea.polygon.length > 0);
+  const generatedCoverageAreas = coverageAreas.filter((coverageArea) => coverageArea.polygon.length > 0);
+  const plottedCoverageAreas = showCoverage ? generatedCoverageAreas : [];
 
-  if (positioned.length === 0 && plottedCoverageAreas.length === 0) {
+  if (positioned.length === 0 && coverageAreas.length === 0) {
     return;
   }
 
   const center = averageLatLng([
     ...positioned.map((driver) => driver.location),
-    ...plottedCoverageAreas.map((coverageArea) => coverageArea.warehouse.location),
+    ...coverageAreas.map((coverageArea) => coverageArea.warehouse.location),
   ]);
   const map = new maps.Map(container, {
     center,
@@ -1201,6 +1266,10 @@ async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverM
   const bounds = new maps.LatLngBounds();
   const infoWindow = new maps.InfoWindow();
   const DriverLocationOverlay = createDriverLocationOverlay(maps);
+
+  coverageAreas.forEach((coverageArea) => {
+    bounds.extend({ lat: coverageArea.warehouse.location.lat, lng: coverageArea.warehouse.location.lng });
+  });
 
   plottedCoverageAreas.forEach((coverageArea, index) => {
     const color = coverageColor(index);
@@ -1260,7 +1329,7 @@ async function renderGoogleDriverMap(container: HTMLDivElement, drivers: DriverM
     bounds.extend(position);
   });
 
-  if (positioned.length > 1 || plottedCoverageAreas.length > 0) {
+  if (positioned.length > 1 || coverageAreas.length > 0) {
     map.fitBounds(bounds, 72);
   }
 }
