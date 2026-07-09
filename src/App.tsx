@@ -37,6 +37,11 @@ import { hasGoogleMapsBrowserKey, loadGoogleMaps } from "./lib/googleMaps";
 import { PromoToolsView } from "./PromoToolsView";
 
 type View = "accounts" | "drivers" | "routes" | "orders" | "promo";
+type OrderStatusDisplay = {
+  cancelled: boolean;
+  label: "FULFILLED" | "CANCELLED";
+  tone: "success" | "danger";
+};
 
 const views: Array<{ id: View; icon: ReactNode; label: string }> = [
   { id: "accounts", icon: <UserCog size={18} aria-hidden="true" />, label: "Accounts" },
@@ -663,22 +668,32 @@ function OrdersView({ token }: { token: string }) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="grid gap-3">
           {!loading && orders.length === 0 ? <EmptyState>No orders returned.</EmptyState> : null}
-          {orders.map((order, index) => (
-            <Card key={String(order.id || index)} className="cursor-pointer transition hover:border-[var(--bb-blaze)]" onClick={() => void openOrder(order)}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="truncate text-lg font-black">{readOrderLabel(order)}</h3>
-                  <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{order.email || "No customer email"}</p>
+          {orders.map((order, index) => {
+            const orderStatus = getOrderStatusDisplay(order);
+            const cancellationReason = getCancellationReason(order);
+
+            return (
+              <Card key={String(order.id || index)} className="cursor-pointer transition hover:border-[var(--bb-blaze)]" onClick={() => void openOrder(order)}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-black">{readOrderLabel(order)}</h3>
+                    <p className="truncate text-sm font-semibold text-[var(--bb-muted)]">{order.email || "No customer email"}</p>
+                  </div>
+                  <Badge tone={orderStatus.tone}>{orderStatus.label}</Badge>
                 </div>
-                <Badge tone="info">{formatMinorUnitMoney(order.total, order.currency_code)}</Badge>
-              </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <Metric label="Payment" value={String(order.payment_status || "unknown")} />
-                <Metric label="Fulfillment" value={String(order.fulfillment_status || "unknown")} />
-                <Metric label="Created" value={formatDate(order.created_at)} />
-              </div>
-            </Card>
-          ))}
+                {orderStatus.cancelled && cancellationReason ? (
+                  <p className="mt-3 rounded-2xl border border-[var(--bb-danger-soft)] bg-[var(--bb-danger-soft)] px-3 py-2 text-sm font-bold text-[var(--bb-danger-strong)]">
+                    Cancellation reason: {cancellationReason}
+                  </p>
+                ) : null}
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <Metric label="Payment" value={String(order.payment_status || "unknown")} />
+                  <Metric label="Total" value={formatMinorUnitMoney(order.total, order.currency_code)} />
+                  <Metric label="Created" value={formatDate(order.created_at)} />
+                </div>
+              </Card>
+            );
+          })}
         </div>
         <Card className="h-fit space-y-3 xl:sticky xl:top-24">
           <div className="flex items-center justify-between">
@@ -707,6 +722,7 @@ function OrderDetailSummary({ detail }: { detail: Record<string, unknown> }) {
     metadata.driver_delivery_status,
     "Not started",
   );
+  const orderStatus = getOrderStatusDisplay(order);
 
   return (
     <div className="space-y-4">
@@ -714,7 +730,7 @@ function OrderDetailSummary({ detail }: { detail: Record<string, unknown> }) {
         <Metric label="Customer" value={readText(order.email, "No email")} />
         <Metric label="Total" value={formatMinorUnitMoney(order.total, order.currency_code)} />
         <Metric label="Payment" value={readText(order.payment_status, "unknown")} />
-        <Metric label="Fulfillment" value={readText(order.fulfillment_status, "unknown")} />
+        <Metric label="Order" value={orderStatus.label} />
         <Metric label="Delivery" value={deliveryStatus} />
         <Metric label="Created" value={formatDate(order.created_at)} />
       </div>
@@ -1043,6 +1059,62 @@ function readOrderLabel(order: MedusaOrder) {
   if (order.display_id) return `Order #${order.display_id}`;
   if (order.id) return String(order.id);
   return "Order";
+}
+
+function getOrderStatusDisplay(order: Record<string, unknown>): OrderStatusDisplay {
+  const cancelled = isCancelledOrder(order);
+
+  return cancelled
+    ? { cancelled, label: "CANCELLED", tone: "danger" }
+    : { cancelled, label: "FULFILLED", tone: "success" };
+}
+
+function isCancelledOrder(order: Record<string, unknown>) {
+  const metadata = readRecord(order.metadata);
+  const statusValues = [
+    order.status,
+    order.fulfillment_status,
+    metadata.bayblaze_delivery_status,
+    metadata.delivery_status,
+    metadata.driver_delivery_status,
+    metadata.order_status,
+  ].map(normalizeStatus);
+
+  return statusValues.some((value) => value === "cancelled" || value === "canceled") ||
+    Boolean(readText(order.canceled_at, order.cancelled_at, metadata.canceled_at, metadata.cancelled_at));
+}
+
+function getCancellationReason(order: Record<string, unknown>) {
+  const metadata = readRecord(order.metadata);
+
+  return readText(
+    order.cancellation_reason,
+    order.cancellationReason,
+    order.cancel_reason,
+    order.cancelReason,
+    order.canceled_reason,
+    order.canceledReason,
+    order.cancelled_reason,
+    order.cancelledReason,
+    metadata.cancellation_reason,
+    metadata.cancellationReason,
+    metadata.cancel_reason,
+    metadata.cancelReason,
+    metadata.canceled_reason,
+    metadata.canceledReason,
+    metadata.cancelled_reason,
+    metadata.cancelledReason,
+    metadata.bayblaze_cancellation_reason,
+    metadata.bayblazeCancellationReason,
+    metadata.delivery_cancellation_reason,
+    metadata.deliveryCancellationReason,
+    metadata.driver_delivery_cancellation_reason,
+    metadata.driverDeliveryCancellationReason,
+  );
+}
+
+function normalizeStatus(value: unknown) {
+  return readText(value).toLowerCase().replace(/[\s-]+/g, "_");
 }
 
 function formatMinorUnitMoney(value: unknown, currency: unknown) {
