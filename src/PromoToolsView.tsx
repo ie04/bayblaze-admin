@@ -3,12 +3,13 @@ import { ChevronDown, ChevronRight, Copy, Download, Plus, Printer, QrCode, Refre
 import QRCode from "qrcode";
 
 import { createPromoCode, deletePromoCode, loadPromoCodes, updatePromoCode } from "./lib/adminApi";
-import type { AdminPromoCode, AdminPromoCodeType } from "./lib/types";
+import type { AdminPromoCode, AdminPromoCodeCategory, AdminPromoCodeType } from "./lib/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader } from "./components/ui";
 
 type CopyState = "idle" | "copied" | "failed";
 
 type PromoCard = {
+  category: AdminPromoCodeCategory;
   code: string;
   codeType: AdminPromoCodeType;
   discountPercent: string;
@@ -20,6 +21,7 @@ type PromoCard = {
   originalDiscountPercent?: string;
   originalMinimumSpendCents?: number;
   persisted: boolean;
+  usageLimit?: number;
   usedCount?: number;
 };
 
@@ -68,6 +70,7 @@ export function PromoToolsView({ token }: { token: string }) {
     const code = `BB${createPromoCodeSuffix()}`;
     setPromos((current) => [
       {
+        category: "admin_promo",
         code,
         codeType: "discount",
         discountPercent: "30",
@@ -177,14 +180,18 @@ function PromoCodeCard({
   const discountPercent = normalizeDiscountPercent(promo.discountPercent);
   const minimumSpendCents = promo.minimumSpendEnabled ? normalizeMoneyCents(promo.minimumSpend) : 0;
   const promoUrl = useMemo(() => buildPromoUrl(normalizedCode), [normalizedCode]);
-  const dirty =
+  const isAdminManaged = promo.category === "admin_promo";
+  const canEdit = !promo.persisted || isAdminManaged;
+  const dirty = canEdit && (
     !promo.persisted ||
     normalizedCode !== promo.originalCode ||
     promo.codeType !== (promo.originalCodeType ?? "discount") ||
     (promo.codeType === "discount" && String(discountPercent) !== (promo.originalDiscountPercent ?? promo.discountPercent.trim())) ||
-    minimumSpendCents !== (promo.originalMinimumSpendCents ?? 0);
+    minimumSpendCents !== (promo.originalMinimumSpendCents ?? 0)
+  );
   const promoTitle = getPromoTitle({ codeType: promo.codeType, discountPercent });
-  const promoSummary = `${promoTitle}${minimumSpendCents > 0 ? ` over ${formatCents(minimumSpendCents)}` : ""}${promo.persisted ? "" : " draft"}`;
+  const sourceLabel = getPromoSourceLabel(promo.category);
+  const promoSummary = `${sourceLabel} · ${promoTitle}${minimumSpendCents > 0 ? ` over ${formatCents(minimumSpendCents)}` : ""}${promo.persisted ? "" : " draft"}`;
 
   useEffect(() => {
     if (hidden) {
@@ -199,6 +206,10 @@ function PromoCodeCard({
   }, [hidden, promoUrl]);
 
   async function savePromo() {
+    if (!canEdit) {
+      return;
+    }
+
     try {
       setSaving(true);
       setActionError("");
@@ -221,6 +232,10 @@ function PromoCodeCard({
   }
 
   async function deletePromo() {
+    if (!canEdit) {
+      return;
+    }
+
     if (!promo.persisted || !promo.originalCode) {
       onDeleteLocal();
       return;
@@ -262,6 +277,10 @@ function PromoCodeCard({
   }
 
   function generateReplacementCode() {
+    if (!canEdit) {
+      return;
+    }
+
     onUpdate({ code: `BB${createPromoCodeSuffix()}` });
   }
 
@@ -281,10 +300,13 @@ function PromoCodeCard({
         </button>
 
         <div className="flex shrink-0 items-center gap-2">
+          <Badge tone={isAdminManaged ? "brand" : "neutral"}>{sourceLabel}</Badge>
           <Badge tone={promo.persisted ? "success" : "warning"}>{promo.persisted ? "PUBLISHED" : "DRAFT"}</Badge>
-          <Button aria-label={`Delete ${normalizedCode}`} disabled={deleting || saving} onClick={() => void deletePromo()} size="icon" variant="danger">
-            <Trash2 size={17} aria-hidden="true" />
-          </Button>
+          {canEdit ? (
+            <Button aria-label={`Delete ${normalizedCode}`} disabled={deleting || saving} onClick={() => void deletePromo()} size="icon" variant="danger">
+              <Trash2 size={17} aria-hidden="true" />
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -293,6 +315,7 @@ function PromoCodeCard({
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
+                disabled={!canEdit}
                 label="Promo code"
                 onChange={(event) => onUpdate({ code: normalizePromoCode(event.target.value) })}
                 value={promo.code}
@@ -300,7 +323,8 @@ function PromoCodeCard({
               <label className="grid gap-2 text-sm font-black uppercase tracking-[0.12em] text-[var(--bb-muted)]">
                 Promo type
                 <select
-                  className="min-h-12 rounded-2xl border border-[var(--bb-line)] bg-white px-4 text-base font-bold normal-case tracking-normal text-[var(--bb-charcoal)] outline-none transition focus:border-[var(--bb-green)]"
+                  className="min-h-12 rounded-2xl border border-[var(--bb-line)] bg-white px-4 text-base font-bold normal-case tracking-normal text-[var(--bb-charcoal)] outline-none transition focus:border-[var(--bb-green)] disabled:cursor-not-allowed disabled:bg-[var(--bb-surface)] disabled:text-[var(--bb-muted)]"
+                  disabled={!canEdit}
                   onChange={(event) => onUpdate({ codeType: event.target.value as AdminPromoCodeType })}
                   value={promo.codeType}
                 >
@@ -310,6 +334,7 @@ function PromoCodeCard({
               </label>
               {promo.codeType === "discount" ? (
                 <Input
+                  disabled={!canEdit}
                   label="Discount percent"
                   max="100"
                   min="1"
@@ -329,6 +354,7 @@ function PromoCodeCard({
                 <input
                   checked={promo.minimumSpendEnabled}
                   className="mt-1 size-5 accent-[var(--bb-blaze)]"
+                  disabled={!canEdit}
                   onChange={(event) =>
                     onUpdate({
                       minimumSpend: event.target.checked && !promo.minimumSpend ? "50" : promo.minimumSpend,
@@ -343,7 +369,7 @@ function PromoCodeCard({
                 </span>
               </label>
               <Input
-                disabled={!promo.minimumSpendEnabled}
+                disabled={!canEdit || !promo.minimumSpendEnabled}
                 inputMode="decimal"
                 label="Minimum"
                 min="0"
@@ -363,6 +389,7 @@ function PromoCodeCard({
             {promo.persisted ? (
               <div className="text-xs font-black uppercase text-[var(--bb-muted)]">
                 Used {promo.usedCount ?? 0} times
+                {!isAdminManaged && promo.usageLimit ? ` of ${promo.usageLimit}` : ""}
               </div>
             ) : null}
 
@@ -370,14 +397,18 @@ function PromoCodeCard({
             {actionError ? <ErrorState>{actionError}</ErrorState> : null}
 
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-              <Button disabled={saving || deleting} onClick={() => void savePromo()} variant={dirty ? "primary" : "secondary"}>
-                <Save size={17} aria-hidden="true" />
-                {saving ? "Saving" : promo.persisted ? "Save" : "Create"}
-              </Button>
-              <Button onClick={generateReplacementCode} variant="secondary">
-                <RefreshCw size={17} aria-hidden="true" />
-                Generate
-              </Button>
+              {canEdit ? (
+                <>
+                  <Button disabled={saving || deleting} onClick={() => void savePromo()} variant={dirty ? "primary" : "secondary"}>
+                    <Save size={17} aria-hidden="true" />
+                    {saving ? "Saving" : promo.persisted ? "Save" : "Create"}
+                  </Button>
+                  <Button onClick={generateReplacementCode} variant="secondary">
+                    <RefreshCw size={17} aria-hidden="true" />
+                    Generate
+                  </Button>
+                </>
+              ) : null}
               <Button onClick={() => void copyPromoUrl()} variant="secondary">
                 <Copy size={17} aria-hidden="true" />
                 {copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy link"}
@@ -420,8 +451,10 @@ function toPromoCard(promoCode: AdminPromoCode): PromoCard {
   const codeType = promoCode.codeType === "bogo" ? "bogo" : "discount";
   const discountPercent = String(promoCode.discountPercent || 30);
   const minimumSpendCents = Math.max(0, Math.round(promoCode.minimumSpendCents || 0));
+  const category = promoCode.category === "win_referral" ? "win_referral" : "admin_promo";
 
   return {
+    category,
     code: promoCode.code,
     codeType,
     discountPercent,
@@ -433,6 +466,7 @@ function toPromoCard(promoCode: AdminPromoCode): PromoCard {
     originalDiscountPercent: discountPercent,
     originalMinimumSpendCents: minimumSpendCents,
     persisted: true,
+    usageLimit: promoCode.usageLimit,
     usedCount: promoCode.usedCount,
   };
 }
@@ -463,6 +497,10 @@ function getPromoTitle({
   discountPercent: number;
 }) {
   return codeType === "bogo" ? "Buy 1 Get 1 Free" : `${discountPercent}% Off`;
+}
+
+function getPromoSourceLabel(category: AdminPromoCodeCategory) {
+  return category === "win_referral" ? "Win Referral" : "Admin Promo";
 }
 
 function loadHiddenCodes() {

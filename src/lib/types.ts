@@ -114,12 +114,18 @@ export type CoverageAreaInput = {
 };
 
 export type AdminPromoCodeType = "discount" | "bogo";
+export type AdminPromoCodeCategory = "admin_promo" | "win_referral";
 
 export type AdminPromoCode = {
+  campaign?: string;
+  category: AdminPromoCodeCategory;
   code: string;
   codeType: AdminPromoCodeType;
   discountPercent: number;
   minimumSpendCents: number;
+  ownerUid?: string;
+  referralCode?: string;
+  rewardId?: string;
   status: string;
   usageLimit: number;
   usedCount: number;

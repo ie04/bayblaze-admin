@@ -113,10 +113,13 @@ write account docs from the dashboard.
   the ordered variant quantities before the backend marks the order deleted.
   Deleted orders stay visible with a grey `DELETED` pill and are hidden inside
   the collapsed Deleted dropdown below active orders.
-- Create, update, delete, collapse, and generate QR assets for admin-owned
-  checkout promo codes in the Admin Promo section. Admin-created promos are
-  persisted by `bayblaze-api` as `admin_promo` discount records; hidden/open
-  card state is only a local dashboard organization preference.
+- Create, update, delete, collapse, and generate QR assets for checkout promo
+  codes in the Admin Promo section. Admin-created promos are persisted by
+  `bayblaze-api` as `admin_promo` discount records. BayBlaze Win friend codes
+  are returned by the same `/v1/admin/promo-codes` listing as `win_referral`
+  discount records for centralized visibility, but the dashboard treats them as
+  API-managed/read-only customer reward records. Hidden/open card state is only
+  a local dashboard organization preference.
   Admin Promo can optionally set a minimum basket size before tax; enabled
   minimums are sent as `minimumSpendCents`, and disabled minimums are sent as
   `0`.
