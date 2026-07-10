@@ -64,6 +64,9 @@ GET   /v1/admin/promo-codes
 POST  /v1/admin/promo-codes
 PATCH /v1/admin/promo-codes/:code
 DELETE /v1/admin/promo-codes/:code
+GET   /v1/admin/email-automations
+PATCH /v1/admin/email-automations/:eventType
+POST  /v1/admin/email-automations/:eventType/test
 GET   /v1/admin/orders
 GET   /v1/admin/orders/:orderId
 DELETE /v1/admin/orders/:orderId
@@ -118,6 +121,11 @@ write account docs from the dashboard.
   minimums are sent as `minimumSpendCents`, and disabled minimums are sent as
   `0`.
   The storefront no longer hosts an internal promo QR generator route.
+- Configure API-owned automated email actions in the Email section. The browser
+  edits only `bayblaze-api` automation records and never stores Resend keys.
+  Supported automations include `order_placed`, with editable enablement,
+  recipient mode, sender/reply-to, subject, text, HTML, internal recipients,
+  test sends, and recent send logs.
 
 The dashboard renders route plots from API data and draws active coverage
 polygons inside the Map page's Google Map. The live map is the one browser

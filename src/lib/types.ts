@@ -127,6 +127,35 @@ export type AdminPromoCode = {
   updatedAt: string;
 };
 
+export type EmailRecipientMode = "customer" | "internal" | "both";
+
+export type EmailAutomation = {
+  description: string;
+  enabled: boolean;
+  eventType: "order_placed";
+  fromEmail: string;
+  htmlTemplate: string;
+  internalRecipientEmails: string[];
+  label: string;
+  recipientMode: EmailRecipientMode;
+  replyTo: string;
+  subjectTemplate: string;
+  textTemplate: string;
+  updatedAt: string;
+};
+
+export type EmailAutomationLog = {
+  createdAt: string;
+  eventId: string;
+  eventType: string;
+  id: string;
+  message: string;
+  recipientCount: number;
+  status: string;
+  subject: string;
+  to: string[];
+};
+
 export type MedusaOrder = Record<string, unknown> & {
   id?: string;
   display_id?: number;

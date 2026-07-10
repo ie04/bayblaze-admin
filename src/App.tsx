@@ -48,8 +48,9 @@ import type { Account, AccountBadge, AccountRole, CoverageArea, CoverageAreaInpu
 import { cx } from "./lib/classes";
 import { hasGoogleMapsBrowserKey, loadGoogleMaps } from "./lib/googleMaps";
 import { PromoToolsView } from "./PromoToolsView";
+import { EmailAutomationsView } from "./EmailAutomationsView";
 
-type View = "accounts" | "map" | "routes" | "orders" | "promo";
+type View = "accounts" | "map" | "routes" | "orders" | "promo" | "email";
 type OrderStatusDisplay = {
   cancelled: boolean;
   deleted: boolean;
@@ -63,6 +64,7 @@ const views: Array<{ id: View; icon: ReactNode; label: string }> = [
   { id: "routes", icon: <Route size={18} aria-hidden="true" />, label: "Routes" },
   { id: "orders", icon: <ClipboardList size={18} aria-hidden="true" />, label: "Orders" },
   { id: "promo", icon: <QrCode size={18} aria-hidden="true" />, label: "Promo" },
+  { id: "email", icon: <Mail size={18} aria-hidden="true" />, label: "Email" },
 ];
 
 const roleOptions: AccountRole[] = ["admin", "driver", "inventory"];
@@ -160,11 +162,12 @@ function App() {
           {activeView === "routes" ? <RoutesView token={session.token} /> : null}
           {activeView === "orders" ? <OrdersView token={session.token} /> : null}
           {activeView === "promo" ? <PromoToolsView token={session.token} /> : null}
+          {activeView === "email" ? <EmailAutomationsView token={session.token} /> : null}
         </section>
       </div>
 
       <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--bb-line)] bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(17,24,39,0.08)] backdrop-blur md:hidden">
-        <nav className="grid grid-cols-5 gap-1" aria-label="Admin navigation">
+        <nav className="grid grid-cols-6 gap-1" aria-label="Admin navigation">
           {views.map((item) => (
             <button
               key={item.id}

@@ -8,6 +8,9 @@ import type {
   CoverageAreaInput,
   DriverMapEntry,
   DriverRoute,
+  EmailAutomation,
+  EmailAutomationLog,
+  EmailRecipientMode,
   IsochronePlot,
   MedusaOrder,
   Session,
@@ -43,6 +46,17 @@ type PromoCodeUpdateInput = {
   codeType?: AdminPromoCodeType;
   discountPercent?: number;
   minimumSpendCents?: number;
+};
+
+type EmailAutomationUpdateInput = {
+  enabled?: boolean;
+  fromEmail?: string;
+  htmlTemplate?: string;
+  internalRecipientEmails?: string[];
+  recipientMode?: EmailRecipientMode;
+  replyTo?: string;
+  subjectTemplate?: string;
+  textTemplate?: string;
 };
 
 export function loadStoredSession(): Session | null {
@@ -255,6 +269,34 @@ export function updatePromoCode(
 export function deletePromoCode(token: string, code: string) {
   return request<{ ok: true }>(`/v1/admin/promo-codes/${encodeURIComponent(code)}`, {
     method: "DELETE",
+    token,
+  });
+}
+
+export function loadEmailAutomations(token: string) {
+  return request<{ automations: EmailAutomation[]; logs: EmailAutomationLog[] }>("/v1/admin/email-automations", { token });
+}
+
+export function updateEmailAutomation(
+  token: string,
+  eventType: EmailAutomation["eventType"],
+  input: EmailAutomationUpdateInput,
+) {
+  return request<{ automation: EmailAutomation }>(`/v1/admin/email-automations/${encodeURIComponent(eventType)}`, {
+    body: input,
+    method: "PATCH",
+    token,
+  });
+}
+
+export function sendEmailAutomationTest(
+  token: string,
+  eventType: EmailAutomation["eventType"],
+  input: { recipientEmail: string },
+) {
+  return request<{ sent: number; skipped: boolean }>(`/v1/admin/email-automations/${encodeURIComponent(eventType)}/test`, {
+    body: input,
+    method: "POST",
     token,
   });
 }
