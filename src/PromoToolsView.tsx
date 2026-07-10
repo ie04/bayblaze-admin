@@ -13,9 +13,12 @@ type PromoCard = {
   codeType: AdminPromoCodeType;
   discountPercent: string;
   id: string;
+  minimumSpend: string;
+  minimumSpendEnabled: boolean;
   originalCode?: string;
   originalCodeType?: AdminPromoCodeType;
   originalDiscountPercent?: string;
+  originalMinimumSpendCents?: number;
   persisted: boolean;
   usedCount?: number;
 };
@@ -69,6 +72,8 @@ export function PromoToolsView({ token }: { token: string }) {
         codeType: "discount",
         discountPercent: "30",
         id: crypto.randomUUID(),
+        minimumSpend: "50",
+        minimumSpendEnabled: false,
         persisted: false,
       },
       ...current,
@@ -170,14 +175,16 @@ function PromoCodeCard({
   const [deleting, setDeleting] = useState(false);
   const normalizedCode = normalizePromoCode(promo.code) || defaultPromoCode;
   const discountPercent = normalizeDiscountPercent(promo.discountPercent);
+  const minimumSpendCents = promo.minimumSpendEnabled ? normalizeMoneyCents(promo.minimumSpend) : 0;
   const promoUrl = useMemo(() => buildPromoUrl(normalizedCode), [normalizedCode]);
   const dirty =
     !promo.persisted ||
     normalizedCode !== promo.originalCode ||
     promo.codeType !== (promo.originalCodeType ?? "discount") ||
-    (promo.codeType === "discount" && String(discountPercent) !== (promo.originalDiscountPercent ?? promo.discountPercent.trim()));
+    (promo.codeType === "discount" && String(discountPercent) !== (promo.originalDiscountPercent ?? promo.discountPercent.trim())) ||
+    minimumSpendCents !== (promo.originalMinimumSpendCents ?? 0);
   const promoTitle = getPromoTitle({ codeType: promo.codeType, discountPercent });
-  const promoSummary = `${promoTitle}${promo.persisted ? "" : " draft"}`;
+  const promoSummary = `${promoTitle}${minimumSpendCents > 0 ? ` over ${formatCents(minimumSpendCents)}` : ""}${promo.persisted ? "" : " draft"}`;
 
   useEffect(() => {
     if (hidden) {
@@ -199,6 +206,7 @@ function PromoCodeCard({
         code: normalizedCode,
         codeType: promo.codeType,
         discountPercent,
+        minimumSpendCents,
       });
       const response = promo.persisted && promo.originalCode
         ? await updatePromoCode(token, promo.originalCode, input)
@@ -316,6 +324,35 @@ function PromoCodeCard({
               )}
             </div>
 
+            <div className="grid gap-3 rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-end">
+              <label className="flex min-w-0 items-start gap-3 text-sm font-bold leading-6 text-[var(--bb-charcoal)]">
+                <input
+                  checked={promo.minimumSpendEnabled}
+                  className="mt-1 size-5 accent-[var(--bb-blaze)]"
+                  onChange={(event) =>
+                    onUpdate({
+                      minimumSpend: event.target.checked && !promo.minimumSpend ? "50" : promo.minimumSpend,
+                      minimumSpendEnabled: event.target.checked,
+                    })
+                  }
+                  type="checkbox"
+                />
+                <span>
+                  <span className="block text-xs font-black uppercase text-[var(--bb-muted)]">Minimum basket before tax</span>
+                  <span className="block">Require a basket amount before this promo applies.</span>
+                </span>
+              </label>
+              <Input
+                disabled={!promo.minimumSpendEnabled}
+                inputMode="decimal"
+                label="Minimum"
+                min="0"
+                onChange={(event) => onUpdate({ minimumSpend: normalizeMoneyInput(event.target.value) })}
+                placeholder="50.00"
+                value={promo.minimumSpend}
+              />
+            </div>
+
             <div className="grid gap-2">
               <p className="text-xs font-black uppercase text-[var(--bb-muted)]">Promo link</p>
               <div className="break-all rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-4 py-3 text-sm font-bold leading-6 text-[var(--bb-charcoal)]">
@@ -382,15 +419,19 @@ function PromoCodeCard({
 function toPromoCard(promoCode: AdminPromoCode): PromoCard {
   const codeType = promoCode.codeType === "bogo" ? "bogo" : "discount";
   const discountPercent = String(promoCode.discountPercent || 30);
+  const minimumSpendCents = Math.max(0, Math.round(promoCode.minimumSpendCents || 0));
 
   return {
     code: promoCode.code,
     codeType,
     discountPercent,
     id: promoCode.code,
+    minimumSpend: minimumSpendCents > 0 ? centsToMoneyInput(minimumSpendCents) : "50",
+    minimumSpendEnabled: minimumSpendCents > 0,
     originalCode: promoCode.code,
     originalCodeType: codeType,
     originalDiscountPercent: discountPercent,
+    originalMinimumSpendCents: minimumSpendCents,
     persisted: true,
     usedCount: promoCode.usedCount,
   };
@@ -400,16 +441,18 @@ function getPromoSaveInput({
   code,
   codeType,
   discountPercent,
+  minimumSpendCents,
 }: {
   code: string;
   codeType: AdminPromoCodeType;
   discountPercent: number;
+  minimumSpendCents: number;
 }) {
   if (codeType === "bogo") {
-    return { code, codeType };
+    return { code, codeType, minimumSpendCents };
   }
 
-  return { code, codeType, discountPercent };
+  return { code, codeType, discountPercent, minimumSpendCents };
 }
 
 function getPromoTitle({
@@ -460,6 +503,38 @@ function normalizeDiscountPercent(value: string) {
   }
 
   return Math.min(Math.max(Math.round(number * 100) / 100, 1), 100);
+}
+
+function normalizeMoneyInput(value: string) {
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  const [dollars = "", ...rest] = cleaned.split(".");
+  const cents = rest.join("").slice(0, 2);
+
+  return rest.length ? `${dollars.slice(0, 6)}.${cents}` : dollars.slice(0, 6);
+}
+
+function normalizeMoneyCents(value: string) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number <= 0) {
+    return 0;
+  }
+
+  return Math.min(Math.round(number * 100), 1_000_000_00);
+}
+
+function centsToMoneyInput(cents: number) {
+  const amount = cents / 100;
+
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+}
+
+function formatCents(cents: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    style: "currency",
+  }).format(cents / 100);
 }
 
 function createPromoCodeSuffix() {

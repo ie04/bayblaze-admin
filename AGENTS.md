@@ -114,6 +114,9 @@ write account docs from the dashboard.
   checkout promo codes in the Admin Promo section. Admin-created promos are
   persisted by `bayblaze-api` as `admin_promo` discount records; hidden/open
   card state is only a local dashboard organization preference.
+  Admin Promo can optionally set a minimum basket size before tax; enabled
+  minimums are sent as `minimumSpendCents`, and disabled minimums are sent as
+  `0`.
   The storefront no longer hosts an internal promo QR generator route.
 
 The dashboard renders route plots from API data and draws active coverage

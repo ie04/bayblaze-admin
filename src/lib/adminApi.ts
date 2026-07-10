@@ -35,12 +35,14 @@ type PromoCodeInput = {
   code: string;
   codeType: AdminPromoCodeType;
   discountPercent?: number;
+  minimumSpendCents?: number;
 };
 
 type PromoCodeUpdateInput = {
   code?: string;
   codeType?: AdminPromoCodeType;
   discountPercent?: number;
+  minimumSpendCents?: number;
 };
 
 export function loadStoredSession(): Session | null {
