@@ -20,7 +20,9 @@ type PromoCard = {
   originalCodeType?: AdminPromoCodeType;
   originalDiscountPercent?: string;
   originalMinimumSpendCents?: number;
+  originalSingleUsePerAccount?: boolean;
   persisted: boolean;
+  singleUsePerAccount: boolean;
   usageLimit?: number;
   usedCount?: number;
 };
@@ -78,6 +80,7 @@ export function PromoToolsView({ token }: { token: string }) {
         minimumSpend: "50",
         minimumSpendEnabled: false,
         persisted: false,
+        singleUsePerAccount: false,
       },
       ...current,
     ]);
@@ -187,7 +190,8 @@ function PromoCodeCard({
     normalizedCode !== promo.originalCode ||
     promo.codeType !== (promo.originalCodeType ?? "discount") ||
     (promo.codeType === "discount" && String(discountPercent) !== (promo.originalDiscountPercent ?? promo.discountPercent.trim())) ||
-    minimumSpendCents !== (promo.originalMinimumSpendCents ?? 0)
+    minimumSpendCents !== (promo.originalMinimumSpendCents ?? 0) ||
+    promo.singleUsePerAccount !== (promo.originalSingleUsePerAccount ?? false)
   );
   const promoTitle = getPromoTitle({ codeType: promo.codeType, discountPercent });
   const sourceLabel = getPromoSourceLabel(promo.category);
@@ -218,6 +222,7 @@ function PromoCodeCard({
         codeType: promo.codeType,
         discountPercent,
         minimumSpendCents,
+        singleUsePerAccount: promo.singleUsePerAccount,
       });
       const response = promo.persisted && promo.originalCode
         ? await updatePromoCode(token, promo.originalCode, input)
@@ -379,6 +384,20 @@ function PromoCodeCard({
               />
             </div>
 
+            <label className="flex min-w-0 items-start gap-3 rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-4 text-sm font-bold leading-6 text-[var(--bb-charcoal)]">
+              <input
+                checked={promo.singleUsePerAccount}
+                className="mt-1 size-5 accent-[var(--bb-blaze)]"
+                disabled={!canEdit}
+                onChange={(event) => onUpdate({ singleUsePerAccount: event.target.checked })}
+                type="checkbox"
+              />
+              <span>
+                <span className="block text-xs font-black uppercase text-[var(--bb-muted)]">Single use per account</span>
+                <span className="block">Restrict each signed-in customer account to one successful checkout with this promo.</span>
+              </span>
+            </label>
+
             <div className="grid gap-2">
               <p className="text-xs font-black uppercase text-[var(--bb-muted)]">Promo link</p>
               <div className="break-all rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-4 py-3 text-sm font-bold leading-6 text-[var(--bb-charcoal)]">
@@ -390,6 +409,7 @@ function PromoCodeCard({
               <div className="text-xs font-black uppercase text-[var(--bb-muted)]">
                 Used {promo.usedCount ?? 0} times
                 {!isAdminManaged && promo.usageLimit ? ` of ${promo.usageLimit}` : ""}
+                {promo.singleUsePerAccount ? " · single use per account" : ""}
               </div>
             ) : null}
 
@@ -465,7 +485,9 @@ function toPromoCard(promoCode: AdminPromoCode): PromoCard {
     originalCodeType: codeType,
     originalDiscountPercent: discountPercent,
     originalMinimumSpendCents: minimumSpendCents,
+    originalSingleUsePerAccount: promoCode.singleUsePerAccount === true,
     persisted: true,
+    singleUsePerAccount: promoCode.singleUsePerAccount === true,
     usageLimit: promoCode.usageLimit,
     usedCount: promoCode.usedCount,
   };
@@ -476,17 +498,19 @@ function getPromoSaveInput({
   codeType,
   discountPercent,
   minimumSpendCents,
+  singleUsePerAccount,
 }: {
   code: string;
   codeType: AdminPromoCodeType;
   discountPercent: number;
   minimumSpendCents: number;
+  singleUsePerAccount: boolean;
 }) {
   if (codeType === "bogo") {
-    return { code, codeType, minimumSpendCents };
+    return { code, codeType, minimumSpendCents, singleUsePerAccount };
   }
 
-  return { code, codeType, discountPercent, minimumSpendCents };
+  return { code, codeType, discountPercent, minimumSpendCents, singleUsePerAccount };
 }
 
 function getPromoTitle({

@@ -39,6 +39,7 @@ type PromoCodeInput = {
   codeType: AdminPromoCodeType;
   discountPercent?: number;
   minimumSpendCents?: number;
+  singleUsePerAccount?: boolean;
 };
 
 type PromoCodeUpdateInput = {
@@ -46,6 +47,7 @@ type PromoCodeUpdateInput = {
   codeType?: AdminPromoCodeType;
   discountPercent?: number;
   minimumSpendCents?: number;
+  singleUsePerAccount?: boolean;
 };
 
 type EmailAutomationUpdateInput = {

@@ -122,7 +122,10 @@ write account docs from the dashboard.
   a local dashboard organization preference.
   Admin Promo can optionally set a minimum basket size before tax; enabled
   minimums are sent as `minimumSpendCents`, and disabled minimums are sent as
-  `0`.
+  `0`. Admin Promo can also set `singleUsePerAccount`, which lets each signed-in
+  customer account successfully use that promo on only one checkout; the
+  backend records usage after successful orders and rejects later attempts by
+  the same account.
   The storefront no longer hosts an internal promo QR generator route.
 - Configure API-owned automated email actions in the Email section. The browser
   edits only `bayblaze-api` automation records and never stores Resend keys.

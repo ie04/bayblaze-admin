@@ -126,6 +126,7 @@ export type AdminPromoCode = {
   ownerUid?: string;
   referralCode?: string;
   rewardId?: string;
+  singleUsePerAccount: boolean;
   status: string;
   usageLimit: number;
   usedCount: number;
