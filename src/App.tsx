@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
+  Activity,
   ChevronDown,
   ChevronRight,
   Check,
@@ -49,8 +50,9 @@ import { cx } from "./lib/classes";
 import { hasGoogleMapsBrowserKey, loadGoogleMaps } from "./lib/googleMaps";
 import { PromoToolsView } from "./PromoToolsView";
 import { EmailAutomationsView } from "./EmailAutomationsView";
+import { StorefrontActivityView } from "./StorefrontActivityView";
 
-type View = "accounts" | "map" | "routes" | "orders" | "promo" | "email";
+type View = "accounts" | "activity" | "map" | "routes" | "orders" | "promo" | "email";
 type OrderStatusDisplay = {
   cancelled: boolean;
   deleted: boolean;
@@ -60,6 +62,7 @@ type OrderStatusDisplay = {
 
 const views: Array<{ id: View; icon: ReactNode; label: string }> = [
   { id: "accounts", icon: <UserCog size={18} aria-hidden="true" />, label: "Accounts" },
+  { id: "activity", icon: <Activity size={18} aria-hidden="true" />, label: "Activity" },
   { id: "map", icon: <MapPinned size={18} aria-hidden="true" />, label: "Map" },
   { id: "routes", icon: <Route size={18} aria-hidden="true" />, label: "Routes" },
   { id: "orders", icon: <ClipboardList size={18} aria-hidden="true" />, label: "Orders" },
@@ -158,6 +161,7 @@ function App() {
 
         <section className="min-w-0 pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-24">
           {activeView === "accounts" ? <AccountsView token={session.token} /> : null}
+          {activeView === "activity" ? <StorefrontActivityView token={session.token} /> : null}
           {activeView === "map" ? <MapView token={session.token} /> : null}
           {activeView === "routes" ? <RoutesView token={session.token} /> : null}
           {activeView === "orders" ? <OrdersView token={session.token} /> : null}
@@ -167,7 +171,7 @@ function App() {
       </div>
 
       <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--bb-line)] bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(17,24,39,0.08)] backdrop-blur md:hidden">
-        <nav className="grid grid-cols-6 gap-1" aria-label="Admin navigation">
+        <nav className="grid grid-cols-7 gap-1" aria-label="Admin navigation">
           {views.map((item) => (
             <button
               key={item.id}

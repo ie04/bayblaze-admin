@@ -158,6 +158,35 @@ export type StorefrontSettings = {
   updatedAt: string;
 };
 
+export type StorefrontActivitySession = {
+  abandoned: boolean;
+  abandonmentReason: string;
+  cart: {
+    itemCount: number;
+    valueCents: number;
+  };
+  createdAt: string;
+  endedAt: string;
+  id: string;
+  lastEventType: string;
+  lastPage: {
+    path: string;
+    referrer: string;
+    title: string;
+    url: string;
+  };
+  lastSeenAt: string;
+  recentEvents: Array<{
+    eventId: string;
+    eventType: string;
+    occurredAt: string;
+    path: string;
+  }>;
+  updatedAt: string;
+  userAgent: string;
+  visitorId: string;
+};
+
 export type EmailRecipientMode = "customer" | "internal" | "both";
 
 export type EmailAutomation = {

@@ -15,6 +15,7 @@ import type {
   MedusaOrder,
   Session,
   StorefrontSettings,
+  StorefrontActivitySession,
 } from "./types";
 
 const apiBaseUrl = (import.meta.env.VITE_BAYBLAZE_API_URL || "https://api.bayblaze.net").replace(/\/$/, "");
@@ -282,6 +283,10 @@ export function deletePromoCode(token: string, code: string) {
 
 export function loadStorefrontSettings(token: string) {
   return request<{ settings: StorefrontSettings }>("/v1/admin/storefront-settings", { token });
+}
+
+export function loadStorefrontActivitySessions(token: string) {
+  return request<{ sessions: StorefrontActivitySession[] }>("/v1/admin/storefront-activity/sessions?limit=100", { token });
 }
 
 export function updateStorefrontSettings(token: string, input: StorefrontSettingsUpdateInput) {
