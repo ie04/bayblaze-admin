@@ -130,6 +130,10 @@ write account docs from the dashboard.
   customer account successfully use that promo on only one checkout; the
   backend records usage after successful orders and rejects later attempts by
   the same account.
+  Admin Promo also includes the storefront-wide price adjustment control. It
+  reads and writes `priceAdjustmentCents` through
+  `GET/PATCH /v1/admin/storefront-settings`; the storefront consumes the public
+  `/v1/storefront/settings` value to adjust item prices sitewide.
   The storefront no longer hosts an internal promo QR generator route.
 - Configure API-owned automated email actions in the Email section. The browser
   edits only `bayblaze-api` automation records and never stores Resend keys.

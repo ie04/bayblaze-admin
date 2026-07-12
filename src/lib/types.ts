@@ -153,6 +153,11 @@ export type AdminPromoCode = {
   updatedAt: string;
 };
 
+export type StorefrontSettings = {
+  priceAdjustmentCents: number;
+  updatedAt: string;
+};
+
 export type EmailRecipientMode = "customer" | "internal" | "both";
 
 export type EmailAutomation = {

@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Copy, Download, Plus, Printer, QrCode, RefreshCw, Save, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleOff, Copy, Download, Plus, Printer, QrCode, RefreshCw, Save, Trash2 } from "lucide-react";
 import QRCode from "qrcode";
 
-import { createPromoCode, deletePromoCode, loadPromoCodes, updatePromoCode } from "./lib/adminApi";
-import type { AdminPromoCode, AdminPromoCodeCategory, AdminPromoCodeType } from "./lib/types";
+import {
+  createPromoCode,
+  deletePromoCode,
+  loadPromoCodes,
+  loadStorefrontSettings,
+  updatePromoCode,
+  updateStorefrontSettings,
+} from "./lib/adminApi";
+import type { AdminPromoCode, AdminPromoCodeCategory, AdminPromoCodeType, StorefrontSettings } from "./lib/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader } from "./components/ui";
 
 type CopyState = "idle" | "copied" | "failed";
@@ -130,6 +137,7 @@ export function PromoToolsView({ token }: { token: string }) {
       />
 
       {error ? <ErrorState>{error}</ErrorState> : null}
+      <StorefrontPriceAdjustmentCard token={token} />
       {loading ? <LoadingState label="Loading promo codes..." /> : null}
       {!loading && promos.length === 0 ? <EmptyState title="No promo codes yet">Create a promo to generate its QR card.</EmptyState> : null}
 
@@ -153,6 +161,122 @@ export function PromoToolsView({ token }: { token: string }) {
         })}
       </div>
     </div>
+  );
+}
+
+function StorefrontPriceAdjustmentCard({ token }: { token: string }) {
+  const [settings, setSettings] = useState<StorefrontSettings | null>(null);
+  const [amount, setAmount] = useState("0");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const amountCents = normalizeMoneyCents(amount);
+  const persistedCents = Math.max(0, Math.round(settings?.priceAdjustmentCents ?? 0));
+  const dirty = amountCents !== persistedCents;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadStorefrontSettings(token)
+      .then((response) => {
+        if (cancelled) return;
+        setSettings(response.settings);
+        setAmount(centsToMoneyInput(response.settings.priceAdjustmentCents));
+        setError("");
+      })
+      .catch((caught) => {
+        if (cancelled) return;
+        setError(caught instanceof Error ? caught.message : "Could not load storefront settings.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  async function saveSettings() {
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+      const response = await updateStorefrontSettings(token, {
+        priceAdjustmentCents: amountCents,
+      });
+
+      setSettings(response.settings);
+      setAmount(centsToMoneyInput(response.settings.priceAdjustmentCents));
+      setMessage(
+        response.settings.priceAdjustmentCents > 0
+          ? `Storefront prices are now adjusted by ${formatCents(response.settings.priceAdjustmentCents)}.`
+          : "Storefront price adjustment is off.",
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save storefront settings.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase text-[var(--bb-muted)]">Storefront pricing</p>
+          <h2 className="mt-1 text-xl font-black text-[var(--bb-charcoal)]">Sitewide price adjustment</h2>
+          <p className="mt-1 text-sm font-semibold leading-6 text-[var(--bb-muted)]">
+            Subtract a fixed amount from every storefront item price before it reaches shop, cart, and checkout.
+          </p>
+        </div>
+        <Badge tone={persistedCents > 0 ? "success" : "neutral"}>
+          {persistedCents > 0 ? `${formatCents(persistedCents)} off` : "Off"}
+        </Badge>
+      </div>
+
+      {loading ? <LoadingState label="Loading storefront pricing..." /> : null}
+      {error ? <ErrorState>{error}</ErrorState> : null}
+      {message ? (
+        <div className="rounded-2xl border border-[var(--bb-success-soft)] bg-[var(--bb-success-soft)] px-4 py-3 text-sm font-bold text-[var(--bb-success-strong)]">
+          {message}
+        </div>
+      ) : null}
+
+      {!loading ? (
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,220px)_auto_auto] sm:items-end">
+          <Input
+            disabled={saving}
+            inputMode="decimal"
+            label="Amount off"
+            min="0"
+            onChange={(event) => {
+              setAmount(normalizeMoneyInput(event.target.value));
+              setMessage("");
+            }}
+            placeholder="5.00"
+            value={amount}
+          />
+          <Button disabled={saving || !dirty} onClick={() => void saveSettings()} variant={dirty ? "primary" : "secondary"}>
+            <Save size={17} aria-hidden="true" />
+            {saving ? "Saving" : "Save adjustment"}
+          </Button>
+          <Button
+            disabled={saving || amountCents === 0}
+            onClick={() => {
+              setAmount("0");
+              setMessage("");
+            }}
+            variant="secondary"
+          >
+            <CircleOff size={17} aria-hidden="true" />
+            Turn off
+          </Button>
+        </div>
+      ) : null}
+    </Card>
   );
 }
 

@@ -14,6 +14,7 @@ import type {
   IsochronePlot,
   MedusaOrder,
   Session,
+  StorefrontSettings,
 } from "./types";
 
 const apiBaseUrl = (import.meta.env.VITE_BAYBLAZE_API_URL || "https://api.bayblaze.net").replace(/\/$/, "");
@@ -59,6 +60,10 @@ type EmailAutomationUpdateInput = {
   replyTo?: string;
   subjectTemplate?: string;
   textTemplate?: string;
+};
+
+type StorefrontSettingsUpdateInput = {
+  priceAdjustmentCents: number;
 };
 
 export function loadStoredSession(): Session | null {
@@ -271,6 +276,18 @@ export function updatePromoCode(
 export function deletePromoCode(token: string, code: string) {
   return request<{ ok: true }>(`/v1/admin/promo-codes/${encodeURIComponent(code)}`, {
     method: "DELETE",
+    token,
+  });
+}
+
+export function loadStorefrontSettings(token: string) {
+  return request<{ settings: StorefrontSettings }>("/v1/admin/storefront-settings", { token });
+}
+
+export function updateStorefrontSettings(token: string, input: StorefrontSettingsUpdateInput) {
+  return request<{ settings: StorefrontSettings }>("/v1/admin/storefront-settings", {
+    body: input,
+    method: "PATCH",
     token,
   });
 }
