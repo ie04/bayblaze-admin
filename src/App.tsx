@@ -474,6 +474,7 @@ function AccountsView({ token }: { token: string }) {
                       {account.disabled ? "Enable" : "Disable"}
                     </Button>
                   </div>
+                  <AccountReferralsSection account={account} />
                 </div>
               ) : null}
             </Card>
@@ -482,6 +483,89 @@ function AccountsView({ token }: { token: string }) {
       </div>
     </div>
   );
+}
+
+function AccountReferralsSection({ account }: { account: Account }) {
+  const referrals = account.winReferrals ?? [];
+
+  return (
+    <section className="rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-black uppercase text-[var(--bb-charcoal)]">
+            Referrals
+          </h3>
+          <p className="text-xs font-semibold leading-5 text-[var(--bb-muted)]">
+            BayBlaze Win referral creation, friend-code consumption, and freebie claim state.
+          </p>
+        </div>
+        <Badge tone={referrals.length > 0 ? "info" : "neutral"}>
+          {referrals.length > 0 ? `${referrals.length} generated` : "None"}
+        </Badge>
+      </div>
+
+      {referrals.length === 0 ? (
+        <p className="mt-3 rounded-2xl border border-dashed border-[var(--bb-line)] bg-white px-3 py-2 text-sm font-semibold text-[var(--bb-muted)]">
+          This account has not created a BayBlaze Win referral.
+        </p>
+      ) : (
+        <div className="mt-3 grid gap-2">
+          {referrals.map((referral) => (
+            <div
+              className="rounded-2xl border border-[var(--bb-line)] bg-white p-3"
+              key={referral.id || referral.referralCode}
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-sm font-black text-[var(--bb-charcoal)]">
+                    {referral.referralCode || "No code"}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--bb-muted)]">
+                    {referral.campaign || "Unknown campaign"} · Created {formatDate(referral.createdAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Badge tone="success">Created</Badge>
+                  <Badge tone={referral.referralConsumed ? "success" : "warning"}>
+                    Referral {referral.referralConsumed ? "consumed" : "open"}
+                  </Badge>
+                  <Badge tone={referral.freebieConsumed ? "success" : "neutral"}>
+                    Freebie {referral.freebieConsumed ? "consumed" : "open"}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <Metric label="Status" value={formatReferralStatus(referral.status)} />
+                <Metric label="Order" value={referral.completedOrderId || "No qualifying order"} />
+                <Metric label="Freebie" value={formatFreebieClaim(referral)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function formatReferralStatus(status: string) {
+  return status
+    ? status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : "Unknown";
+}
+
+function formatFreebieClaim(referral: NonNullable<Account["winReferrals"]>[number]) {
+  if (referral.freebieConsumed) {
+    return referral.claimedProductId || referral.claimedVariantId || referral.claimedAt
+      ? "Claimed"
+      : "Consumed";
+  }
+
+  if (referral.claimTokenIssued) {
+    return "Unlocked";
+  }
+
+  return "Not unlocked";
 }
 
 function MapView({ token }: { token: string }) {

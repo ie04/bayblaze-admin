@@ -95,6 +95,10 @@ write account docs from the dashboard.
 
 - Search accounts, set customer/employee badges, and grant/remove employee
   roles.
+- Expanded account cards include a Referrals section for BayBlaze Win reward
+  records created by that account, showing whether a Win referral was generated,
+  whether the friend-code referral was consumed by a qualifying order, and
+  whether the referrer's freebie was consumed.
 - Disable/enable accounts.
 - Toggle account-level age verification bypass for testing.
 - View drivers on a Google Maps JavaScript map widget using API-provided live

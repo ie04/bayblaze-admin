@@ -11,6 +11,25 @@ export type Account = {
     ageVerificationDisabled: boolean;
   };
   uid: string;
+  winReferrals?: AccountWinReferral[];
+};
+
+export type AccountWinReferral = {
+  campaign: string;
+  claimTokenIssued: boolean;
+  claimedAt: string;
+  claimedProductId: string;
+  claimedVariantId: string;
+  completedOrderId: string;
+  createdAt: string;
+  freebieConsumed: boolean;
+  id: string;
+  qualifiedAt: string;
+  referralCode: string;
+  referralConsumed: boolean;
+  referralUrl: string;
+  status: string;
+  updatedAt: string;
 };
 
 export type Session = {
