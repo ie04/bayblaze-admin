@@ -139,11 +139,12 @@ write account docs from the dashboard.
   settings routes; when enabled, storefront checkout bypasses AgeChecker
   globally and records testing bypass metadata on orders.
   The storefront no longer hosts an internal promo QR generator route.
-- View recent storefront abandonment/activity sessions in the Activity section.
-  The dashboard reads `GET /v1/admin/storefront-activity/sessions` from
-  `bayblaze-api`, showing the last page, last event, cart count/value, and
-  recent lifecycle breadcrumbs for each storefront session. The admin browser
-  must not read Firestore directly for abandonment tracking.
+- View storefront analytics in the Activity section. The dashboard reads
+  `GET /v1/admin/storefront-activity/analytics` from `bayblaze-api` for daily
+  unique visitor, session, and page-view buckets over time, and reads
+  `GET /v1/admin/storefront-activity/sessions` for recent session details such
+  as last page, last event, cart count/value, and lifecycle breadcrumbs. The
+  admin browser must not read Firestore directly for activity tracking.
 - Configure API-owned automated email actions in the Email section. The browser
   edits only `bayblaze-api` automation records and never stores Resend keys.
   Supported automations include `order_placed`, with editable enablement,

@@ -2,24 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, ExternalLink, RefreshCw } from "lucide-react";
 
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageHeader } from "./components/ui";
-import { loadStorefrontActivitySessions } from "./lib/adminApi";
-import type { StorefrontActivitySession } from "./lib/types";
+import { loadStorefrontActivitySessions, loadStorefrontVisitorAnalytics } from "./lib/adminApi";
+import type { StorefrontActivitySession, StorefrontVisitorAnalytics } from "./lib/types";
 
 export function StorefrontActivityView({ token }: { token: string }) {
   const [sessions, setSessions] = useState<StorefrontActivitySession[]>([]);
+  const [analytics, setAnalytics] = useState<StorefrontVisitorAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const stats = useMemo(() => {
-    const abandoned = sessions.filter((session) => session.abandoned).length;
-    const withCart = sessions.filter((session) => session.cart.itemCount > 0).length;
-
-    return {
-      abandoned,
-      active: Math.max(0, sessions.length - abandoned),
-      withCart,
-    };
-  }, [sessions]);
+  const sessionsWithCart = useMemo(() => sessions.filter((session) => session.cart.itemCount > 0).length, [sessions]);
 
   const load = useCallback(async (options: { quiet?: boolean } = {}) => {
     if (options.quiet) {
@@ -30,7 +22,13 @@ export function StorefrontActivityView({ token }: { token: string }) {
     setError("");
 
     try {
-      setSessions((await loadStorefrontActivitySessions(token)).sessions);
+      const [sessionResponse, analyticsResponse] = await Promise.all([
+        loadStorefrontActivitySessions(token),
+        loadStorefrontVisitorAnalytics(token, 30),
+      ]);
+
+      setSessions(sessionResponse.sessions);
+      setAnalytics(analyticsResponse);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Storefront activity could not be loaded.");
     } finally {
@@ -52,8 +50,8 @@ export function StorefrontActivityView({ token }: { token: string }) {
       <PageHeader
         eyebrow="Storefront"
         icon={<Activity size={22} aria-hidden="true" />}
-        title="Customer Activity"
-        subtitle="Recent storefront sessions, last activity, and likely abandonment moments."
+        title="Storefront Analytics"
+        subtitle="Unique visitors over time, plus recent session details for follow-up."
         actions={
           <Button loading={refreshing} onClick={() => void load({ quiet: true })} variant="secondary">
             <RefreshCw size={17} aria-hidden="true" />
@@ -62,22 +60,77 @@ export function StorefrontActivityView({ token }: { token: string }) {
         }
       />
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <Metric label="Ended" value={stats.abandoned} />
-        <Metric label="Still Active" value={stats.active} />
-        <Metric label="With Cart" value={stats.withCart} />
-      </div>
+      {analytics ? (
+        <>
+          <div className="grid gap-3 md:grid-cols-4">
+            <Metric label="Unique Visitors" value={analytics.totals.uniqueVisitors} />
+            <Metric label="Sessions" value={analytics.totals.sessions} />
+            <Metric label="Page Views" value={analytics.totals.pageViews} />
+            <Metric label="Sessions With Cart" value={sessionsWithCart} />
+          </div>
+
+          <VisitorTrendChart analytics={analytics} />
+        </>
+      ) : null}
 
       {error ? <ErrorState>{error}</ErrorState> : null}
       {loading ? <LoadingState label="Loading storefront activity" /> : null}
       {!loading && sessions.length === 0 ? <EmptyState>No storefront activity has been recorded yet.</EmptyState> : null}
 
       <div className="grid gap-3">
+        {!loading && sessions.length > 0 ? (
+          <h2 className="text-sm font-black uppercase text-[var(--bb-muted)]">Recent sessions</h2>
+        ) : null}
         {sessions.map((session) => (
           <ActivitySessionCard key={session.id} session={session} />
         ))}
       </div>
     </div>
+  );
+}
+
+function VisitorTrendChart({ analytics }: { analytics: StorefrontVisitorAnalytics }) {
+  const maxVisitors = Math.max(...analytics.buckets.map((bucket) => bucket.uniqueVisitors), 1);
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase text-[var(--bb-muted)]">Last {analytics.range.days} days</p>
+          <h2 className="mt-1 text-xl font-black text-[var(--bb-charcoal)]">Unique Visitors</h2>
+        </div>
+        <p className="text-sm font-semibold text-[var(--bb-muted)]">
+          {formatDate(analytics.range.from)} to {formatDate(analytics.range.to)}
+        </p>
+      </div>
+
+      <div className="flex h-56 items-end gap-1 overflow-x-auto border-b border-[var(--bb-line)] pb-2">
+        {analytics.buckets.map((bucket) => (
+          <div className="flex min-w-8 flex-1 flex-col items-center gap-2" key={bucket.date}>
+            <div className="flex h-44 w-full items-end">
+              <div
+                className="w-full rounded-t-xl bg-[var(--bb-blaze)] transition"
+                style={{ height: `${Math.max(4, (bucket.uniqueVisitors / maxVisitors) * 100)}%` }}
+                title={`${bucket.uniqueVisitors} unique visitors on ${formatDate(bucket.date)}`}
+              />
+            </div>
+            <span className="text-[10px] font-black text-[var(--bb-muted)]">
+              {formatShortDate(bucket.date)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        {analytics.buckets.slice(-3).map((bucket) => (
+          <Detail
+            key={bucket.date}
+            label={formatDate(bucket.date)}
+            value={`${bucket.uniqueVisitors} visitors`}
+          />
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -182,6 +235,27 @@ function formatDateTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "short",
     timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function formatDate(value: string) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
+}
+
+function formatShortDate(value: string) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
   }).format(new Date(value));
 }
 

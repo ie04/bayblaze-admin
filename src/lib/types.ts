@@ -188,6 +188,25 @@ export type StorefrontActivitySession = {
   visitorId: string;
 };
 
+export type StorefrontVisitorAnalytics = {
+  buckets: Array<{
+    date: string;
+    pageViews: number;
+    sessions: number;
+    uniqueVisitors: number;
+  }>;
+  range: {
+    days: number;
+    from: string;
+    to: string;
+  };
+  totals: {
+    pageViews: number;
+    sessions: number;
+    uniqueVisitors: number;
+  };
+};
+
 export type EmailRecipientMode = "customer" | "internal" | "both";
 
 export type EmailAutomation = {

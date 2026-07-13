@@ -16,6 +16,7 @@ import type {
   Session,
   StorefrontSettings,
   StorefrontActivitySession,
+  StorefrontVisitorAnalytics,
 } from "./types";
 
 const apiBaseUrl = (import.meta.env.VITE_BAYBLAZE_API_URL || "https://api.bayblaze.net").replace(/\/$/, "");
@@ -288,6 +289,10 @@ export function loadStorefrontSettings(token: string) {
 
 export function loadStorefrontActivitySessions(token: string) {
   return request<{ sessions: StorefrontActivitySession[] }>("/v1/admin/storefront-activity/sessions?limit=100", { token });
+}
+
+export function loadStorefrontVisitorAnalytics(token: string, days = 30) {
+  return request<StorefrontVisitorAnalytics>(`/v1/admin/storefront-activity/analytics?days=${encodeURIComponent(days)}`, { token });
 }
 
 export function updateStorefrontSettings(token: string, input: StorefrontSettingsUpdateInput) {
