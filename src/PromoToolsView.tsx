@@ -137,7 +137,7 @@ export function PromoToolsView({ token }: { token: string }) {
       />
 
       {error ? <ErrorState>{error}</ErrorState> : null}
-      <StorefrontPriceAdjustmentCard token={token} />
+      <StorefrontSettingsCard token={token} />
       {loading ? <LoadingState label="Loading promo codes..." /> : null}
       {!loading && promos.length === 0 ? <EmptyState title="No promo codes yet">Create a promo to generate its QR card.</EmptyState> : null}
 
@@ -164,7 +164,7 @@ export function PromoToolsView({ token }: { token: string }) {
   );
 }
 
-function StorefrontPriceAdjustmentCard({ token }: { token: string }) {
+function StorefrontSettingsCard({ token }: { token: string }) {
   const [settings, setSettings] = useState<StorefrontSettings | null>(null);
   const [amount, setAmount] = useState("0");
   const [loading, setLoading] = useState(true);
@@ -174,6 +174,7 @@ function StorefrontPriceAdjustmentCard({ token }: { token: string }) {
   const amountCents = normalizeMoneyCents(amount);
   const persistedCents = Math.max(0, Math.round(settings?.priceAdjustmentCents ?? 0));
   const dirty = amountCents !== persistedCents;
+  const ageVerificationDisabled = settings?.ageVerificationDisabled === true;
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +223,29 @@ function StorefrontPriceAdjustmentCard({ token }: { token: string }) {
     }
   }
 
+  async function toggleAgeVerificationDisabled() {
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+      const response = await updateStorefrontSettings(token, {
+        ageVerificationDisabled: !ageVerificationDisabled,
+      });
+
+      setSettings(response.settings);
+      setAmount(centsToMoneyInput(response.settings.priceAdjustmentCents));
+      setMessage(
+        response.settings.ageVerificationDisabled
+          ? "Storefront age verification is disabled for testing."
+          : "Storefront age verification is enabled.",
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save storefront settings.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <Card className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -246,34 +270,60 @@ function StorefrontPriceAdjustmentCard({ token }: { token: string }) {
       ) : null}
 
       {!loading ? (
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,220px)_auto_auto] sm:items-end">
-          <Input
-            disabled={saving}
-            inputMode="decimal"
-            label="Amount off"
-            min="0"
-            onChange={(event) => {
-              setAmount(normalizeMoneyInput(event.target.value));
-              setMessage("");
-            }}
-            placeholder="5.00"
-            value={amount}
-          />
-          <Button disabled={saving || !dirty} onClick={() => void saveSettings()} variant={dirty ? "primary" : "secondary"}>
-            <Save size={17} aria-hidden="true" />
-            {saving ? "Saving" : "Save adjustment"}
-          </Button>
-          <Button
-            disabled={saving || amountCents === 0}
-            onClick={() => {
-              setAmount("0");
-              setMessage("");
-            }}
-            variant="secondary"
-          >
-            <CircleOff size={17} aria-hidden="true" />
-            Turn off
-          </Button>
+        <div className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,220px)_auto_auto] sm:items-end">
+            <Input
+              disabled={saving}
+              inputMode="decimal"
+              label="Amount off"
+              min="0"
+              onChange={(event) => {
+                setAmount(normalizeMoneyInput(event.target.value));
+                setMessage("");
+              }}
+              placeholder="5.00"
+              value={amount}
+            />
+            <Button disabled={saving || !dirty} onClick={() => void saveSettings()} variant={dirty ? "primary" : "secondary"}>
+              <Save size={17} aria-hidden="true" />
+              {saving ? "Saving" : "Save adjustment"}
+            </Button>
+            <Button
+              disabled={saving || amountCents === 0}
+              onClick={() => {
+                setAmount("0");
+                setMessage("");
+              }}
+              variant="secondary"
+            >
+              <CircleOff size={17} aria-hidden="true" />
+              Turn off
+            </Button>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase text-[var(--bb-muted)]">Checkout testing</p>
+                <h3 className="mt-1 text-lg font-black text-[var(--bb-charcoal)]">Age verification</h3>
+                <p className="mt-1 text-sm font-semibold leading-6 text-[var(--bb-muted)]">
+                  Temporarily bypass AgeChecker across the storefront while testing checkout.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={ageVerificationDisabled ? "warning" : "success"}>
+                  {ageVerificationDisabled ? "Disabled" : "Enabled"}
+                </Badge>
+                <Button
+                  disabled={saving}
+                  onClick={() => void toggleAgeVerificationDisabled()}
+                  variant={ageVerificationDisabled ? "secondary" : "danger"}
+                >
+                  {ageVerificationDisabled ? "Enable" : "Disable for testing"}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
     </Card>

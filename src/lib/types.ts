@@ -154,6 +154,7 @@ export type AdminPromoCode = {
 };
 
 export type StorefrontSettings = {
+  ageVerificationDisabled: boolean;
   priceAdjustmentCents: number;
   updatedAt: string;
 };

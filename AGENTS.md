@@ -134,6 +134,10 @@ write account docs from the dashboard.
   reads and writes `priceAdjustmentCents` through
   `GET/PATCH /v1/admin/storefront-settings`; the storefront consumes the public
   `/v1/storefront/settings` value to adjust item prices sitewide.
+  Admin Promo also includes a storefront-wide AgeChecker testing toggle. It
+  reads and writes `ageVerificationDisabled` through the same storefront
+  settings routes; when enabled, storefront checkout bypasses AgeChecker
+  globally and records testing bypass metadata on orders.
   The storefront no longer hosts an internal promo QR generator route.
 - View recent storefront abandonment/activity sessions in the Activity section.
   The dashboard reads `GET /v1/admin/storefront-activity/sessions` from

@@ -64,7 +64,8 @@ type EmailAutomationUpdateInput = {
 };
 
 type StorefrontSettingsUpdateInput = {
-  priceAdjustmentCents: number;
+  ageVerificationDisabled?: boolean;
+  priceAdjustmentCents?: number;
 };
 
 export function loadStoredSession(): Session | null {
