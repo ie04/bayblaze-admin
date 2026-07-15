@@ -1,7 +1,21 @@
 # BayBlaze Admin
 
-Operator dashboard for BayBlaze accounts, drivers, route geometry, driver map
-isochrones, and live order details.
+BayBlaze Admin is the operator dashboard for BayBlaze account, storefront,
+driver, route, order, promo, email, and activity workflows. It gives internal
+operators a focused interface for running the BayBlaze delivery-commerce
+business from one browser app.
+
+## Highlights
+
+- React, TypeScript, Vite, Tailwind CSS, and PWA support.
+- Account search and role/badge management.
+- Storefront settings, promo code, price adjustment, and age-verification test
+  controls.
+- Live driver map, driver route, coverage-area, and order-detail views.
+- Storefront activity analytics, including unique visitor trends over time.
+- Email automation templates and send logs.
+
+## Local Development
 
 ```bash
 npm install
@@ -10,8 +24,8 @@ npm run build
 npm run lint
 ```
 
-Set `VITE_BAYBLAZE_API_URL` to the BayBlaze API origin. Production is expected
-to run at `admin.bayblaze.net` against `https://api.bayblaze.net`.
+## Repository Notes
 
-Set `VITE_GOOGLE_MAPS_BROWSER_API_KEY` to a Google Maps JavaScript API key
-restricted to `admin.bayblaze.net` to render the live driver map widget.
+The browser app talks to BayBlaze API for privileged operations. Production
+credentials, service tokens, and provider keys are intentionally not included in
+this repository.
