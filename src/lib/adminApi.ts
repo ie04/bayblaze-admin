@@ -38,7 +38,7 @@ type GoogleOAuthStartResponse = {
   authorizationUrl: string;
 };
 
-type PromoCodeInput = {
+export type PromoCodeInput = {
   category?: Exclude<AdminPromoCodeCategory, "win_referral">;
   code: string;
   codeType: AdminPromoCodeType;

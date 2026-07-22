@@ -137,6 +137,13 @@ write account docs from the dashboard.
   qualifying purchases, post-discount customer spend, commission owed, and the
   per-order referral ledger. A referral promo cannot be transferred, renamed,
   or deleted after it has tracked a purchase, preserving its audit history.
+  Promo creation starts from one `New Promo` action and uses a four-step modal
+  wizard: type, type-specific details, review, and explicit creation. Opening or
+  advancing the wizard must never add a draft card or call the API. Standard
+  creation exposes percent-off or BOGO; referral creation exposes account owner,
+  percent-off, and commission. Both share code, optional pre-tax minimum, and
+  per-account-use fields. The existing `POST /v1/admin/promo-codes` contract
+  remains the only create boundary.
   Admin Promo also includes the storefront-wide price adjustment control. It
   reads and writes `priceAdjustmentCents` through
   `GET/PATCH /v1/admin/storefront-settings`; the storefront consumes the public
@@ -191,4 +198,5 @@ npm install
 npm run dev
 npm run build
 npm run lint
+npm test
 ```

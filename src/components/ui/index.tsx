@@ -5,6 +5,7 @@ import type {
   ReactNode,
   TextareaHTMLAttributes,
 } from "react";
+import { forwardRef } from "react";
 import { AlertTriangle, Inbox, Loader2 } from "lucide-react";
 
 import { cx } from "../../lib/classes";
@@ -30,7 +31,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "danger" | "ghost" | "quiet";
 };
 
-export function Button({
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({
   children,
   className,
   disabled,
@@ -40,7 +41,7 @@ export function Button({
   type = "button",
   variant = "primary",
   ...props
-}: ButtonProps) {
+}, ref) {
   const variantClass = {
     primary: "border-transparent bg-[var(--bb-blaze)] text-white shadow-[0_12px_24px_rgba(201,77,18,0.18)] hover:bg-[var(--bb-blaze-strong)]",
     secondary: "border-[var(--bb-line)] bg-white text-[var(--bb-charcoal)] shadow-[var(--bb-shadow-soft)] hover:border-[var(--bb-blaze)]",
@@ -65,6 +66,7 @@ export function Button({
         className,
       )}
       disabled={disabled || loading}
+      ref={ref}
       type={type}
       {...props}
     >
@@ -72,7 +74,7 @@ export function Button({
       {children}
     </button>
   );
-}
+});
 
 export function Card({
   children,

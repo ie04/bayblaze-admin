@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, CircleOff, Copy, Download, Plus, Printer, QrCode, RefreshCw, Save, Trash2 } from "lucide-react";
 import QRCode from "qrcode";
 
+import { PromoCreationWizard } from "./PromoCreationWizard";
+import { createPromoCodeSuffix, normalizeMoneyInput, normalizePromoCode } from "./promoCreationModel";
 import {
   createPromoCode,
   deletePromoCode,
@@ -58,9 +60,12 @@ const qrLogoPath = "/icons/bayblaze-flame-qr.png";
 export function PromoToolsView({ token }: { token: string }) {
   const [promos, setPromos] = useState<PromoCard[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [creationMessage, setCreationMessage] = useState("");
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [hiddenCodes, setHiddenCodes] = useState<Set<string>>(() => loadHiddenCodes());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const newPromoButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,27 +95,6 @@ export function PromoToolsView({ token }: { token: string }) {
     window.localStorage.setItem(hiddenStorageKey, JSON.stringify(Array.from(hiddenCodes)));
   }, [hiddenCodes]);
 
-  function addPromo(category: "admin_promo" | "referral_partner" = "admin_promo") {
-    const code = `BB${createPromoCodeSuffix()}`;
-    setPromos((current) => [
-      {
-        category,
-        code,
-        codeType: "discount",
-        commissionPercent: "30",
-        discountPercent: "30",
-        id: crypto.randomUUID(),
-        minimumSpend: "50",
-        minimumSpendEnabled: false,
-        persisted: false,
-        ownerUid: "",
-        singleUsePerAccount: false,
-      },
-      ...current,
-    ]);
-    setHiddenCodes((current) => removeHiddenCode(current, code));
-  }
-
   function updateLocalPromo(id: string, input: Partial<PromoCard>) {
     setPromos((current) => current.map((promo) => (promo.id === id ? { ...promo, ...input } : promo)));
   }
@@ -139,20 +123,31 @@ export function PromoToolsView({ token }: { token: string }) {
     setHiddenCodes((current) => removeHiddenCode(current, promoCode.code));
   }
 
+  function closeCreationWizard() {
+    setWizardOpen(false);
+    window.requestAnimationFrame(() => newPromoButtonRef.current?.focus());
+  }
+
+  async function createPromotion(input: Parameters<typeof createPromoCode>[1]) {
+    const response = await createPromoCode(token, input);
+    const promoCard = toPromoCard(response.promoCode);
+
+    setPromos((current) => [promoCard, ...current.filter((promo) => promo.originalCode !== response.promoCode.code)]);
+    setHiddenCodes((current) => removeHiddenCode(current, response.promoCode.code));
+    setCreationMessage(`${response.promoCode.code} was created successfully.`);
+    closeCreationWizard();
+
+    return response.promoCode;
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
         actions={
-          <div className="flex flex-wrap gap-2">
-          <Button onClick={() => addPromo("admin_promo")} variant="secondary">
+          <Button disabled={loading} onClick={() => { setCreationMessage(""); setWizardOpen(true); }} ref={newPromoButtonRef}>
             <Plus size={17} aria-hidden="true" />
             New promo
           </Button>
-          <Button onClick={() => addPromo("referral_partner")} variant="primary">
-            <Plus size={17} aria-hidden="true" />
-            New referral promo
-          </Button>
-          </div>
         }
         icon={<QrCode size={22} aria-hidden="true" />}
         title="Promo QR"
@@ -160,6 +155,11 @@ export function PromoToolsView({ token }: { token: string }) {
       />
 
       {error ? <ErrorState>{error}</ErrorState> : null}
+      {creationMessage ? (
+        <div aria-live="polite" className="rounded-2xl border border-[var(--bb-success-soft)] bg-[var(--bb-success-soft)] p-4 text-sm font-black text-[var(--bb-success-strong)]">
+          {creationMessage}
+        </div>
+      ) : null}
       <StorefrontSettingsCard token={token} />
       {loading ? <LoadingState label="Loading promo codes..." /> : null}
       {!loading && promos.length === 0 ? <EmptyState title="No promo codes yet">Create a promo to generate its QR card.</EmptyState> : null}
@@ -184,6 +184,7 @@ export function PromoToolsView({ token }: { token: string }) {
           );
         })}
       </div>
+      {wizardOpen ? <PromoCreationWizard accounts={accounts} onClose={closeCreationWizard} onCreate={createPromotion} /> : null}
     </div>
   );
 }
@@ -902,10 +903,6 @@ function buildPromoUrl(code: string) {
   return url.toString();
 }
 
-function normalizePromoCode(value: string) {
-  return value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80).toUpperCase();
-}
-
 function normalizeDiscountPercent(value: string) {
   const number = Number(value);
 
@@ -914,14 +911,6 @@ function normalizeDiscountPercent(value: string) {
   }
 
   return Math.min(Math.max(Math.round(number * 100) / 100, 1), 100);
-}
-
-function normalizeMoneyInput(value: string) {
-  const cleaned = value.replace(/[^0-9.]/g, "");
-  const [dollars = "", ...rest] = cleaned.split(".");
-  const cents = rest.join("").slice(0, 2);
-
-  return rest.length ? `${dollars.slice(0, 6)}.${cents}` : dollars.slice(0, 6);
 }
 
 function normalizeMoneyCents(value: string) {
@@ -955,13 +944,6 @@ function formatPromoDate(value: string) {
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-}
-
-function createPromoCodeSuffix() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = new Uint8Array(6);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
 }
 
 async function renderPromoQr(canvas: HTMLCanvasElement | null, promoUrl: string) {
