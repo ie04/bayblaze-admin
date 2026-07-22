@@ -7,10 +7,11 @@ import {
   deletePromoCode,
   loadPromoCodes,
   loadStorefrontSettings,
+  searchAccounts,
   updatePromoCode,
   updateStorefrontSettings,
 } from "./lib/adminApi";
-import type { AdminPromoCode, AdminPromoCodeCategory, AdminPromoCodeType, StorefrontSettings } from "./lib/types";
+import type { Account, AdminPromoCode, AdminPromoCodeCategory, AdminPromoCodeType, ReferralPromoUse, StorefrontSettings } from "./lib/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader } from "./components/ui";
 
 type CopyState = "idle" | "copied" | "failed";
@@ -19,19 +20,31 @@ type PromoCard = {
   category: AdminPromoCodeCategory;
   code: string;
   codeType: AdminPromoCodeType;
+  commissionPercent: string;
   discountPercent: string;
   id: string;
   minimumSpend: string;
   minimumSpendEnabled: boolean;
   originalCode?: string;
   originalCodeType?: AdminPromoCodeType;
+  originalCommissionPercent?: string;
   originalDiscountPercent?: string;
   originalMinimumSpendCents?: number;
+  originalOwnerUid?: string;
   originalSingleUsePerAccount?: boolean;
   persisted: boolean;
+  ownerDisplayName?: string;
+  ownerEmail?: string;
+  ownerUid: string;
+  referrals?: ReferralPromoUse[];
   singleUsePerAccount: boolean;
   usageLimit?: number;
   usedCount?: number;
+  totalCommissionCents?: number;
+  totalDiscountCents?: number;
+  totalReferredSpendCents?: number;
+  totalReferredSubtotalCents?: number;
+  uniqueReferredCustomers?: number;
 };
 
 const defaultStorefrontOrigin = "https://bayblaze.net";
@@ -44,6 +57,7 @@ const qrLogoPath = "/icons/bayblaze-flame-qr.png";
 
 export function PromoToolsView({ token }: { token: string }) {
   const [promos, setPromos] = useState<PromoCard[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [hiddenCodes, setHiddenCodes] = useState<Set<string>>(() => loadHiddenCodes());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -51,11 +65,12 @@ export function PromoToolsView({ token }: { token: string }) {
   useEffect(() => {
     let cancelled = false;
 
-    loadPromoCodes(token)
-      .then((response) => {
+    Promise.all([loadPromoCodes(token), searchAccounts(token, "")])
+      .then(([response, accountResponse]) => {
         if (cancelled) return;
         setError("");
         setPromos(response.promoCodes.map(toPromoCard));
+        setAccounts(accountResponse.accounts);
       })
       .catch((caught) => {
         if (cancelled) return;
@@ -75,18 +90,20 @@ export function PromoToolsView({ token }: { token: string }) {
     window.localStorage.setItem(hiddenStorageKey, JSON.stringify(Array.from(hiddenCodes)));
   }, [hiddenCodes]);
 
-  function addPromo() {
+  function addPromo(category: "admin_promo" | "referral_partner" = "admin_promo") {
     const code = `BB${createPromoCodeSuffix()}`;
     setPromos((current) => [
       {
-        category: "admin_promo",
+        category,
         code,
         codeType: "discount",
+        commissionPercent: "30",
         discountPercent: "30",
         id: crypto.randomUUID(),
         minimumSpend: "50",
         minimumSpendEnabled: false,
         persisted: false,
+        ownerUid: "",
         singleUsePerAccount: false,
       },
       ...current,
@@ -126,10 +143,16 @@ export function PromoToolsView({ token }: { token: string }) {
     <div className="space-y-4">
       <PageHeader
         actions={
-          <Button onClick={addPromo} variant="secondary">
+          <div className="flex flex-wrap gap-2">
+          <Button onClick={() => addPromo("admin_promo")} variant="secondary">
             <Plus size={17} aria-hidden="true" />
             New promo
           </Button>
+          <Button onClick={() => addPromo("referral_partner")} variant="primary">
+            <Plus size={17} aria-hidden="true" />
+            New referral promo
+          </Button>
+          </div>
         }
         icon={<QrCode size={22} aria-hidden="true" />}
         title="Promo QR"
@@ -155,6 +178,7 @@ export function PromoToolsView({ token }: { token: string }) {
               onToggleHidden={() => toggleHidden(normalizedCode)}
               onUpdate={(input) => updateLocalPromo(promo.id, input)}
               promo={promo}
+              accounts={accounts}
               token={token}
             />
           );
@@ -331,6 +355,7 @@ function StorefrontSettingsCard({ token }: { token: string }) {
 }
 
 function PromoCodeCard({
+  accounts,
   hidden,
   onDeleteLocal,
   onReconcile,
@@ -339,6 +364,7 @@ function PromoCodeCard({
   promo,
   token,
 }: {
+  accounts: Account[];
   hidden: boolean;
   onDeleteLocal: () => void;
   onReconcile: (id: string, promoCode: AdminPromoCode) => void;
@@ -355,21 +381,29 @@ function PromoCodeCard({
   const [deleting, setDeleting] = useState(false);
   const normalizedCode = normalizePromoCode(promo.code) || defaultPromoCode;
   const discountPercent = normalizeDiscountPercent(promo.discountPercent);
+  const commissionPercent = normalizeDiscountPercent(promo.commissionPercent);
   const minimumSpendCents = promo.minimumSpendEnabled ? normalizeMoneyCents(promo.minimumSpend) : 0;
   const promoUrl = useMemo(() => buildPromoUrl(normalizedCode), [normalizedCode]);
   const isAdminManaged = promo.category === "admin_promo";
-  const canEdit = !promo.persisted || isAdminManaged;
+  const isReferralPartner = promo.category === "referral_partner";
+  const canEdit = !promo.persisted || isAdminManaged || isReferralPartner;
+  const hasTrackedReferralPurchases = isReferralPartner && (promo.usedCount ?? 0) > 0;
+  const canChangeCode = canEdit && !hasTrackedReferralPurchases;
+  const canDelete = canEdit && !hasTrackedReferralPurchases;
+  const ownerInAccounts = accounts.some((account) => account.uid === promo.ownerUid);
   const dirty = canEdit && (
     !promo.persisted ||
     normalizedCode !== promo.originalCode ||
     promo.codeType !== (promo.originalCodeType ?? "discount") ||
     (promo.codeType === "discount" && String(discountPercent) !== (promo.originalDiscountPercent ?? promo.discountPercent.trim())) ||
+    (isReferralPartner && String(commissionPercent) !== (promo.originalCommissionPercent ?? promo.commissionPercent.trim())) ||
     minimumSpendCents !== (promo.originalMinimumSpendCents ?? 0) ||
+    (isReferralPartner && promo.ownerUid !== (promo.originalOwnerUid ?? "")) ||
     promo.singleUsePerAccount !== (promo.originalSingleUsePerAccount ?? false)
   );
   const promoTitle = getPromoTitle({ codeType: promo.codeType, discountPercent });
   const sourceLabel = getPromoSourceLabel(promo.category);
-  const promoSummary = `${sourceLabel} · ${promoTitle}${minimumSpendCents > 0 ? ` over ${formatCents(minimumSpendCents)}` : ""}${promo.persisted ? "" : " draft"}`;
+  const promoSummary = `${sourceLabel} · ${promoTitle}${isReferralPartner ? ` · ${commissionPercent}% commission` : ""}${minimumSpendCents > 0 ? ` over ${formatCents(minimumSpendCents)}` : ""}${promo.persisted ? "" : " draft"}`;
 
   useEffect(() => {
     if (hidden) {
@@ -392,10 +426,13 @@ function PromoCodeCard({
       setSaving(true);
       setActionError("");
       const input = getPromoSaveInput({
+        category: promo.category,
         code: normalizedCode,
         codeType: promo.codeType,
+        commissionPercent,
         discountPercent,
         minimumSpendCents,
+        ownerUid: promo.ownerUid,
         singleUsePerAccount: promo.singleUsePerAccount,
       });
       const response = promo.persisted && promo.originalCode
@@ -479,9 +516,9 @@ function PromoCodeCard({
         </button>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Badge tone={isAdminManaged ? "brand" : "neutral"}>{sourceLabel}</Badge>
+          <Badge tone={isAdminManaged || isReferralPartner ? "brand" : "neutral"}>{sourceLabel}</Badge>
           <Badge tone={promo.persisted ? "success" : "warning"}>{promo.persisted ? "PUBLISHED" : "DRAFT"}</Badge>
-          {canEdit ? (
+          {canDelete ? (
             <Button aria-label={`Delete ${normalizedCode}`} disabled={deleting || saving} onClick={() => void deletePromo()} size="icon" variant="danger">
               <Trash2 size={17} aria-hidden="true" />
             </Button>
@@ -494,7 +531,7 @@ function PromoCodeCard({
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
-                disabled={!canEdit}
+                disabled={!canChangeCode}
                 label="Promo code"
                 onChange={(event) => onUpdate({ code: normalizePromoCode(event.target.value) })}
                 value={promo.code}
@@ -508,7 +545,7 @@ function PromoCodeCard({
                   value={promo.codeType}
                 >
                   <option value="discount">Percent off</option>
-                  <option value="bogo">Buy 1 get 1 free</option>
+                  {!isReferralPartner ? <option value="bogo">Buy 1 get 1 free</option> : null}
                 </select>
               </label>
               {promo.codeType === "discount" ? (
@@ -527,6 +564,42 @@ function PromoCodeCard({
                 </div>
               )}
             </div>
+
+            {isReferralPartner ? (
+              <div className="grid gap-3 rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-4 sm:grid-cols-2">
+                <label className="grid gap-2 text-sm font-black uppercase tracking-[0.12em] text-[var(--bb-muted)]">
+                  Referral account
+                  <select
+                    className="min-h-12 rounded-2xl border border-[var(--bb-line)] bg-white px-4 text-base font-bold normal-case tracking-normal text-[var(--bb-charcoal)] outline-none transition focus:border-[var(--bb-green)] disabled:cursor-not-allowed disabled:bg-[var(--bb-surface)] disabled:text-[var(--bb-muted)]"
+                    disabled={!canEdit || promo.persisted}
+                    onChange={(event) => onUpdate({ ownerUid: event.target.value })}
+                    value={promo.ownerUid}
+                  >
+                    <option value="">Select an account</option>
+                    {!ownerInAccounts && promo.ownerUid ? (
+                      <option value={promo.ownerUid}>{promo.ownerDisplayName || promo.ownerEmail || promo.ownerUid}</option>
+                    ) : null}
+                    {accounts.map((account) => (
+                      <option key={account.uid} value={account.uid}>
+                        {account.displayName || account.email} ({account.email})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Input
+                  disabled={!canEdit}
+                  label="Commission percent"
+                  max="100"
+                  min="1"
+                  onChange={(event) => onUpdate({ commissionPercent: event.target.value.replace(/[^\d.]/g, "").slice(0, 5) })}
+                  type="number"
+                  value={promo.commissionPercent}
+                />
+                <p className="text-sm font-semibold leading-6 text-[var(--bb-charcoal)] sm:col-span-2">
+                  {promo.ownerDisplayName || promo.ownerEmail || "This partner"} earns {commissionPercent}% of the customer product total after the {discountPercent}% discount on every qualifying order.
+                </p>
+              </div>
+            ) : null}
 
             <div className="grid gap-3 rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-end">
               <label className="flex min-w-0 items-start gap-3 text-sm font-bold leading-6 text-[var(--bb-charcoal)]">
@@ -587,6 +660,8 @@ function PromoCodeCard({
               </div>
             ) : null}
 
+            {isReferralPartner && promo.persisted ? <ReferralCommissionReport promo={promo} /> : null}
+
             {renderError ? <ErrorState>{renderError}</ErrorState> : null}
             {actionError ? <ErrorState>{actionError}</ErrorState> : null}
 
@@ -597,7 +672,7 @@ function PromoCodeCard({
                     <Save size={17} aria-hidden="true" />
                     {saving ? "Saving" : promo.persisted ? "Save" : "Create"}
                   </Button>
-                  <Button onClick={generateReplacementCode} variant="secondary">
+                  <Button disabled={!canChangeCode} onClick={generateReplacementCode} variant="secondary">
                     <RefreshCw size={17} aria-hidden="true" />
                     Generate
                   </Button>
@@ -641,50 +716,146 @@ function PromoCodeCard({
   );
 }
 
+function ReferralCommissionReport({ promo }: { promo: PromoCard }) {
+  const referrals = promo.referrals ?? [];
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-[var(--bb-line)] bg-white p-4">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--bb-muted)]">Referral performance</p>
+        <p className="mt-1 text-sm font-semibold text-[var(--bb-charcoal)]">
+          Commission is locked per completed order from product spend after the coupon discount.
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <ReferralMetric label="Customers" value={String(promo.uniqueReferredCustomers ?? 0)} />
+        <ReferralMetric label="Purchases" value={String(promo.usedCount ?? 0)} />
+        <ReferralMetric label="Customer spend" value={formatCents(promo.totalReferredSpendCents ?? 0)} />
+        <ReferralMetric label="Commission" value={formatCents(promo.totalCommissionCents ?? 0)} />
+      </div>
+      {referrals.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-[var(--bb-line)] bg-[var(--bb-surface-warm)] px-3 py-2 text-sm font-semibold text-[var(--bb-muted)]">
+          No qualifying referral purchases yet.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-[var(--bb-line)]">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-[var(--bb-surface-warm)] text-xs font-black uppercase text-[var(--bb-muted)]">
+              <tr>
+                <th className="px-3 py-2">Customer</th>
+                <th className="px-3 py-2">Order</th>
+                <th className="px-3 py-2">Spent</th>
+                <th className="px-3 py-2">Commission</th>
+                <th className="px-3 py-2">Recorded</th>
+              </tr>
+            </thead>
+            <tbody>
+              {referrals.map((referral) => (
+                <tr className="border-t border-[var(--bb-line)] font-semibold text-[var(--bb-charcoal)]" key={referral.orderId}>
+                  <td className="px-3 py-2">{referral.customerEmail || referral.uid || "Unknown"}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{referral.orderId}</td>
+                  <td className="px-3 py-2">{formatCents(referral.referredSpendCents)}</td>
+                  <td className="px-3 py-2">{formatCents(referral.commissionCents)} ({referral.commissionPercent}%)</td>
+                  <td className="px-3 py-2">{formatPromoDate(referral.recordedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ReferralMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-3">
+      <p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--bb-muted)]">{label}</p>
+      <p className="mt-1 text-lg font-black text-[var(--bb-charcoal)]">{value}</p>
+    </div>
+  );
+}
+
 function toPromoCard(promoCode: AdminPromoCode): PromoCard {
   const codeType = promoCode.codeType === "bogo" ? "bogo" : "discount";
+  const commissionPercent = String(promoCode.commissionPercent || 30);
   const discountPercent = String(promoCode.discountPercent || 30);
   const minimumSpendCents = Math.max(0, Math.round(promoCode.minimumSpendCents || 0));
-  const category = promoCode.category === "win_referral" ? "win_referral" : "admin_promo";
+  const category = promoCode.category === "win_referral"
+    ? "win_referral"
+    : promoCode.category === "referral_partner"
+      ? "referral_partner"
+      : "admin_promo";
 
   return {
     category,
     code: promoCode.code,
     codeType,
+    commissionPercent,
     discountPercent,
     id: promoCode.code,
     minimumSpend: minimumSpendCents > 0 ? centsToMoneyInput(minimumSpendCents) : "50",
     minimumSpendEnabled: minimumSpendCents > 0,
     originalCode: promoCode.code,
     originalCodeType: codeType,
+    originalCommissionPercent: commissionPercent,
     originalDiscountPercent: discountPercent,
     originalMinimumSpendCents: minimumSpendCents,
+    originalOwnerUid: promoCode.ownerUid ?? "",
     originalSingleUsePerAccount: promoCode.singleUsePerAccount === true,
     persisted: true,
+    ownerDisplayName: promoCode.ownerDisplayName,
+    ownerEmail: promoCode.ownerEmail,
+    ownerUid: promoCode.ownerUid ?? "",
+    referrals: promoCode.referrals,
     singleUsePerAccount: promoCode.singleUsePerAccount === true,
     usageLimit: promoCode.usageLimit,
     usedCount: promoCode.usedCount,
+    totalCommissionCents: promoCode.totalCommissionCents,
+    totalDiscountCents: promoCode.totalDiscountCents,
+    totalReferredSpendCents: promoCode.totalReferredSpendCents,
+    totalReferredSubtotalCents: promoCode.totalReferredSubtotalCents,
+    uniqueReferredCustomers: promoCode.uniqueReferredCustomers,
   };
 }
 
 function getPromoSaveInput({
+  category,
   code,
   codeType,
+  commissionPercent,
   discountPercent,
   minimumSpendCents,
+  ownerUid,
   singleUsePerAccount,
 }: {
+  category: AdminPromoCodeCategory;
   code: string;
   codeType: AdminPromoCodeType;
+  commissionPercent: number;
   discountPercent: number;
   minimumSpendCents: number;
+  ownerUid: string;
   singleUsePerAccount: boolean;
 }) {
-  if (codeType === "bogo") {
-    return { code, codeType, minimumSpendCents, singleUsePerAccount };
+  if (category === "referral_partner") {
+    return {
+      category,
+      code,
+      codeType: "discount" as const,
+      commissionPercent,
+      discountPercent,
+      minimumSpendCents,
+      ownerUid,
+      singleUsePerAccount,
+    };
   }
 
-  return { code, codeType, discountPercent, minimumSpendCents, singleUsePerAccount };
+  if (codeType === "bogo") {
+    return { category: "admin_promo" as const, code, codeType, minimumSpendCents, singleUsePerAccount };
+  }
+
+  return { category: "admin_promo" as const, code, codeType, discountPercent, minimumSpendCents, singleUsePerAccount };
 }
 
 function getPromoTitle({
@@ -698,7 +869,11 @@ function getPromoTitle({
 }
 
 function getPromoSourceLabel(category: AdminPromoCodeCategory) {
-  return category === "win_referral" ? "Win Referral" : "Admin Promo";
+  if (category === "win_referral") {
+    return "Win Referral";
+  }
+
+  return category === "referral_partner" ? "Referral Partner" : "Admin Promo";
 }
 
 function loadHiddenCodes() {
@@ -771,6 +946,15 @@ function formatCents(cents: number) {
     maximumFractionDigits: 2,
     style: "currency",
   }).format(cents / 100);
+}
+
+function formatPromoDate(value: string) {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 function createPromoCodeSuffix() {

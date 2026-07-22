@@ -130,6 +130,13 @@ write account docs from the dashboard.
   customer account successfully use that promo on only one checkout; the
   backend records usage after successful orders and rejects later attempts by
   the same account.
+  Referral partner promos are individualized records in the same promo system.
+  Admins select an existing unified BayBlaze account as the owner and configure
+  the customer discount percentage, partner commission percentage, and optional
+  minimum product spend. The promo card reports unique referred accounts,
+  qualifying purchases, post-discount customer spend, commission owed, and the
+  per-order referral ledger. A referral promo cannot be transferred, renamed,
+  or deleted after it has tracked a purchase, preserving its audit history.
   Admin Promo also includes the storefront-wide price adjustment control. It
   reads and writes `priceAdjustmentCents` through
   `GET/PATCH /v1/admin/storefront-settings`; the storefront consumes the public

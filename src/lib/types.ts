@@ -11,7 +11,20 @@ export type Account = {
     ageVerificationDisabled: boolean;
   };
   uid: string;
+  referralPromos?: AccountReferralPromo[];
   winReferrals?: AccountWinReferral[];
+};
+
+export type AccountReferralPromo = {
+  code: string;
+  commissionPercent: number;
+  discountPercent: number;
+  minimumSpendCents: number;
+  status: string;
+  totalCommissionCents: number;
+  totalReferredSpendCents: number;
+  uniqueReferredCustomers: number;
+  usedCount: number;
 };
 
 export type AccountWinReferral = {
@@ -133,22 +146,45 @@ export type CoverageAreaInput = {
 };
 
 export type AdminPromoCodeType = "discount" | "bogo";
-export type AdminPromoCodeCategory = "admin_promo" | "win_referral";
+export type AdminPromoCodeCategory = "admin_promo" | "referral_partner" | "win_referral";
+
+export type ReferralPromoUse = {
+  code: string;
+  commissionCents: number;
+  commissionPercent: number;
+  customerEmail: string;
+  customerId: string;
+  discountCents: number;
+  orderId: string;
+  recordedAt: string;
+  referredSpendCents: number;
+  subtotalCents: number;
+  uid: string;
+};
 
 export type AdminPromoCode = {
   campaign?: string;
   category: AdminPromoCodeCategory;
   code: string;
   codeType: AdminPromoCodeType;
+  commissionPercent: number;
   discountPercent: number;
   minimumSpendCents: number;
   ownerUid?: string;
+  ownerDisplayName?: string;
+  ownerEmail?: string;
+  referrals?: ReferralPromoUse[];
   referralCode?: string;
   rewardId?: string;
   singleUsePerAccount: boolean;
   status: string;
   usageLimit: number;
   usedCount: number;
+  totalCommissionCents: number;
+  totalDiscountCents: number;
+  totalReferredSpendCents: number;
+  totalReferredSubtotalCents: number;
+  uniqueReferredCustomers: number;
   createdAt: string;
   updatedAt: string;
 };

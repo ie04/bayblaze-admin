@@ -3,6 +3,7 @@ import type {
   AccountBadge,
   AccountRole,
   AdminPromoCode,
+  AdminPromoCodeCategory,
   AdminPromoCodeType,
   CoverageArea,
   CoverageAreaInput,
@@ -38,18 +39,23 @@ type GoogleOAuthStartResponse = {
 };
 
 type PromoCodeInput = {
+  category?: Exclude<AdminPromoCodeCategory, "win_referral">;
   code: string;
   codeType: AdminPromoCodeType;
+  commissionPercent?: number;
   discountPercent?: number;
   minimumSpendCents?: number;
+  ownerUid?: string;
   singleUsePerAccount?: boolean;
 };
 
 type PromoCodeUpdateInput = {
   code?: string;
   codeType?: AdminPromoCodeType;
+  commissionPercent?: number;
   discountPercent?: number;
   minimumSpendCents?: number;
+  ownerUid?: string;
   singleUsePerAccount?: boolean;
 };
 

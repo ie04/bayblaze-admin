@@ -491,6 +491,8 @@ function AccountsView({ token }: { token: string }) {
 
 function AccountReferralsSection({ account }: { account: Account }) {
   const referrals = account.winReferrals ?? [];
+  const referralPromos = account.referralPromos ?? [];
+  const hasReferrals = referrals.length > 0 || referralPromos.length > 0;
 
   return (
     <section className="rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-3">
@@ -500,19 +502,46 @@ function AccountReferralsSection({ account }: { account: Account }) {
             Referrals
           </h3>
           <p className="text-xs font-semibold leading-5 text-[var(--bb-muted)]">
-            BayBlaze Win referral creation, friend-code consumption, and freebie claim state.
+            Commercial referral commissions plus BayBlaze Win friend-code and freebie state.
           </p>
         </div>
-        <Badge tone={referrals.length > 0 ? "info" : "neutral"}>
-          {referrals.length > 0 ? `${referrals.length} generated` : "None"}
+        <Badge tone={hasReferrals ? "info" : "neutral"}>
+          {hasReferrals ? `${referralPromos.length + referrals.length} program${referralPromos.length + referrals.length === 1 ? "" : "s"}` : "None"}
         </Badge>
       </div>
 
-      {referrals.length === 0 ? (
+      {!hasReferrals ? (
         <p className="mt-3 rounded-2xl border border-dashed border-[var(--bb-line)] bg-white px-3 py-2 text-sm font-semibold text-[var(--bb-muted)]">
-          This account has not created a BayBlaze Win referral.
+          This account does not own a referral promo or a BayBlaze Win referral.
         </p>
-      ) : (
+      ) : null}
+
+      {referralPromos.length > 0 ? (
+        <div className="mt-3 grid gap-2">
+          {referralPromos.map((promo) => (
+            <div className="rounded-2xl border border-[var(--bb-line)] bg-white p-3" key={promo.code}>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-mono text-sm font-black text-[var(--bb-charcoal)]">{promo.code}</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--bb-muted)]">
+                    {promo.discountPercent}% off · {promo.commissionPercent}% of post-discount spend
+                    {promo.minimumSpendCents > 0 ? ` · ${formatAccountCents(promo.minimumSpendCents)} minimum` : ""}
+                  </p>
+                </div>
+                <Badge tone={promo.status === "active" ? "success" : "neutral"}>{promo.status}</Badge>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                <Metric label="Customers" value={String(promo.uniqueReferredCustomers)} />
+                <Metric label="Purchases" value={String(promo.usedCount)} />
+                <Metric label="Spend" value={formatAccountCents(promo.totalReferredSpendCents)} />
+                <Metric label="Commission" value={formatAccountCents(promo.totalCommissionCents)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {referrals.length > 0 ? (
         <div className="mt-3 grid gap-2">
           {referrals.map((referral) => (
             <div
@@ -547,9 +576,13 @@ function AccountReferralsSection({ account }: { account: Account }) {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
     </section>
   );
+}
+
+function formatAccountCents(cents: number) {
+  return new Intl.NumberFormat("en-US", { currency: "USD", style: "currency" }).format(cents / 100);
 }
 
 function formatReferralStatus(status: string) {
