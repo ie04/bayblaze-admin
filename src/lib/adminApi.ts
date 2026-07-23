@@ -14,6 +14,8 @@ import type {
   EmailRecipientMode,
   IsochronePlot,
   MedusaOrder,
+  ReferralPartner,
+  ReferralPartnerStatus,
   Session,
   StorefrontSettings,
   StorefrontActivitySession,
@@ -46,6 +48,14 @@ export type PromoCodeInput = {
   discountPercent?: number;
   minimumSpendCents?: number;
   ownerUid?: string;
+  singleUsePerAccount?: boolean;
+};
+
+export type ReferralPartnerApprovalInput = {
+  code?: string;
+  commissionPercent: number;
+  discountPercent: number;
+  minimumSpendCents?: number;
   singleUsePerAccount?: boolean;
 };
 
@@ -168,6 +178,29 @@ export function updateAccount(token: string, uid: string, input: {
 }) {
   return request<{ account: Account }>(`/v1/admin/accounts/${encodeURIComponent(uid)}`, {
     body: input,
+    method: "PATCH",
+    token,
+  });
+}
+
+export function loadReferralPartners(token: string) {
+  return request<{ partners: ReferralPartner[] }>("/v1/admin/partners", { token });
+}
+
+export function approveReferralPartner(token: string, uid: string, input: ReferralPartnerApprovalInput) {
+  return request<{ partner: ReferralPartner; promoCode: AdminPromoCode }>(
+    `/v1/admin/partners/${encodeURIComponent(uid)}/approve`,
+    {
+      body: input,
+      method: "POST",
+      token,
+    },
+  );
+}
+
+export function updateReferralPartnerStatus(token: string, uid: string, status: ReferralPartnerStatus) {
+  return request<{ partner: ReferralPartner }>(`/v1/admin/partners/${encodeURIComponent(uid)}`, {
+    body: { status },
     method: "PATCH",
     token,
   });

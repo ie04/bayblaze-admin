@@ -18,25 +18,45 @@ import {
 } from "./promoCreationModel";
 
 type WizardStep = 1 | 2 | 3 | 4;
+type WizardMode = "promotion" | "referral-account";
 
 const stepLabels = ["Promotion type", "Promotion details", "Review", "Create"] as const;
+const referralAccountStepLabels = ["Account & terms", "Review", "Create"] as const;
 const selectClasses = "min-h-12 w-full rounded-2xl border border-[var(--bb-line)] bg-white px-4 text-base font-bold text-[var(--bb-charcoal)] outline-none transition focus:border-[var(--bb-green)] focus-visible:ring-2 focus-visible:ring-[var(--bb-focus)] focus-visible:ring-offset-2";
 
 export function PromoCreationWizard({
   accounts,
+  initialOwnerUid = "",
+  mode = "promotion",
   onClose,
   onCreate,
+  onSearchAccounts,
 }: {
   accounts: Account[];
+  initialOwnerUid?: string;
+  mode?: WizardMode;
   onClose: () => void;
   onCreate: (input: PromoCodeInput) => Promise<AdminPromoCode>;
+  onSearchAccounts?: (query: string) => Promise<Account[]>;
 }) {
+  const referralAccountMode = mode === "referral-account";
   const [step, setStep] = useState<WizardStep>(1);
-  const [form, setForm] = useState<PromotionForm | null>(null);
+  const [form, setForm] = useState<PromotionForm | null>(() => {
+    if (!referralAccountMode) return null;
+    return {
+      ...createDefaultPromotionForm("referral"),
+      ownerUid: initialOwnerUid,
+    };
+  });
   const [errors, setErrors] = useState<PromotionFormErrors>({});
   const [apiError, setApiError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [discardWarning, setDiscardWarning] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [searchedAccounts, setSearchedAccounts] = useState<Account[]>([]);
+  const [accountQuery, setAccountQuery] = useState("");
+  const [accountSearching, setAccountSearching] = useState(false);
+  const [accountSearchError, setAccountSearchError] = useState("");
   const dialogRef = useRef<HTMLElement | null>(null);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -61,10 +81,12 @@ export function PromoCreationWizard({
     setForm((current) => current?.promotionType === type ? current : createDefaultPromotionForm(type));
     setErrors({});
     setApiError("");
+    setDirty(true);
   }
 
   function updateForm(updates: Partial<PromotionForm>, clearError?: keyof PromotionFormErrors) {
     setForm((current) => current ? { ...current, ...updates } as PromotionForm : current);
+    setDirty(true);
 
     if (clearError) {
       setErrors((current) => ({ ...current, [clearError]: undefined }));
@@ -76,7 +98,7 @@ export function PromoCreationWizard({
       return;
     }
 
-    if (form) {
+    if (dirty) {
       setDiscardWarning(true);
       return;
     }
@@ -87,13 +109,30 @@ export function PromoCreationWizard({
   function continueWizard() {
     setApiError("");
 
+    if (referralAccountMode) {
+      if (step === 1 && form) {
+        const nextErrors = validatePromotionForm(form, selectableAccounts);
+        setErrors(nextErrors);
+
+        if (Object.keys(nextErrors).length === 0) {
+          setStep(2);
+        }
+        return;
+      }
+
+      if (step === 2) {
+        setStep(3);
+      }
+      return;
+    }
+
     if (step === 1) {
       if (form) setStep(2);
       return;
     }
 
     if (step === 2 && form) {
-      const nextErrors = validatePromotionForm(form, accounts);
+      const nextErrors = validatePromotionForm(form, selectableAccounts);
       setErrors(nextErrors);
 
       if (Object.keys(nextErrors).length === 0) {
@@ -115,11 +154,12 @@ export function PromoCreationWizard({
   }
 
   async function createPromotion() {
-    if (!form || submitting || step !== 4) {
+    const finalStep = referralAccountMode ? 3 : 4;
+    if (!form || submitting || step !== finalStep) {
       return;
     }
 
-    const nextErrors = validatePromotionForm(form, accounts);
+    const nextErrors = validatePromotionForm(form, selectableAccounts);
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -165,7 +205,35 @@ export function PromoCreationWizard({
     }
   }
 
-  const title = stepLabels[step - 1];
+  async function searchReferralAccounts() {
+    if (!onSearchAccounts || accountSearching) return;
+    const query = accountQuery.trim();
+
+    if (!query) {
+      setAccountSearchError("Enter the customer's name or email.");
+      return;
+    }
+
+    setAccountSearching(true);
+    setAccountSearchError("");
+    try {
+      const results = await onSearchAccounts(query);
+      setSearchedAccounts((current) => mergeAccounts(current, results));
+      if (results.length === 0) {
+        setAccountSearchError("No eligible customer account matched that search.");
+      }
+    } catch (caught) {
+      setAccountSearchError(caught instanceof Error ? caught.message : "Account search failed.");
+    } finally {
+      setAccountSearching(false);
+    }
+  }
+
+  const selectableAccounts = mergeAccounts(accounts, searchedAccounts);
+  const activeStepLabels = referralAccountMode ? referralAccountStepLabels : stepLabels;
+  const finalStep = activeStepLabels.length;
+  const title = activeStepLabels[step - 1];
+  const entityLabel = referralAccountMode ? "referral account" : "promotion";
 
   return (
     <div
@@ -187,20 +255,31 @@ export function PromoCreationWizard({
         <header className="shrink-0 border-b border-[var(--bb-line)] bg-white p-4 md:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--bb-blaze)]">New Promo</p>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--bb-blaze)]">
+                {referralAccountMode ? "New Referral Account" : "New Promo"}
+              </p>
               <h3 className="mt-1 text-xl font-black text-[var(--bb-charcoal)]" id="promo-wizard-title" ref={titleRef} tabIndex={-1}>
                 {title}
               </h3>
               <p className="mt-1 text-sm font-semibold text-[var(--bb-muted)]" id="promo-wizard-description">
-                Step {step} of 4 · Configure and review before anything is created.
+                Step {step} of {finalStep} · Configure and review before anything is created.
               </p>
             </div>
-            <Button aria-label="Close promotion wizard" disabled={submitting} onClick={requestClose} size="icon" variant="ghost">
+            <Button
+              aria-label={referralAccountMode ? "Close referral account wizard" : "Close promotion wizard"}
+              disabled={submitting}
+              onClick={requestClose}
+              size="icon"
+              variant="ghost"
+            >
               <X size={18} aria-hidden="true" />
             </Button>
           </div>
-          <ol aria-label="Promotion creation progress" className="mt-4 grid grid-cols-4 gap-1.5">
-            {stepLabels.map((label, index) => {
+          <ol
+            aria-label={referralAccountMode ? "Referral account creation progress" : "Promotion creation progress"}
+            className={`mt-4 grid gap-1.5 ${referralAccountMode ? "grid-cols-3" : "grid-cols-4"}`}
+          >
+            {activeStepLabels.map((label, index) => {
               const number = index + 1;
               const complete = number < step;
               const current = number === step;
@@ -218,21 +297,50 @@ export function PromoCreationWizard({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 md:p-5" data-testid="wizard-scroll-region">
-          {step === 1 ? <PromotionTypeStep form={form} onChoose={choosePromotionType} /> : null}
-          {step === 2 && form ? (
-            <PromotionDetailsStep accounts={accounts} errors={errors} form={form} onChange={updateForm} />
+          {!referralAccountMode && step === 1 ? <PromotionTypeStep form={form} onChoose={choosePromotionType} /> : null}
+          {((referralAccountMode && step === 1) || (!referralAccountMode && step === 2)) && form ? (
+            <div className="space-y-4">
+              {referralAccountMode && onSearchAccounts ? (
+                <form
+                  className="grid gap-2 rounded-[20px] border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void searchReferralAccounts();
+                  }}
+                >
+                  <Input
+                    label="Find a unified customer account"
+                    onChange={(event) => {
+                      setAccountQuery(event.target.value);
+                      setAccountSearchError("");
+                    }}
+                    placeholder="Name or email"
+                    value={accountQuery}
+                  />
+                  <Button loading={accountSearching} type="submit" variant="secondary">Search accounts</Button>
+                  {accountSearchError ? (
+                    <p className="text-sm font-bold text-[var(--bb-danger-strong)] sm:col-span-2" role="alert">{accountSearchError}</p>
+                  ) : null}
+                </form>
+              ) : null}
+              <PromotionDetailsStep accounts={selectableAccounts} errors={errors} form={form} onChange={updateForm} />
+            </div>
           ) : null}
-          {step === 3 && form ? <PromotionReview form={form} accounts={accounts} /> : null}
-          {step === 4 && form ? (
+          {((referralAccountMode && step === 2) || (!referralAccountMode && step === 3)) && form ? (
+            <PromotionReview form={form} accounts={selectableAccounts} />
+          ) : null}
+          {step === finalStep && form ? (
             <div className="space-y-4">
               <div className="rounded-[20px] border border-[var(--bb-success-soft)] bg-[var(--bb-success-soft)] p-4">
                 <Badge tone="success">Ready to publish</Badge>
-                <h4 className="mt-3 text-xl font-black text-[var(--bb-charcoal)]">Create {normalizePromoCode(form.code)}</h4>
+                <h4 className="mt-3 text-xl font-black text-[var(--bb-charcoal)]">
+                  {referralAccountMode ? "Create referral account" : `Create ${normalizePromoCode(form.code)}`}
+                </h4>
                 <p className="mt-1 text-sm font-semibold leading-6 text-[var(--bb-success-strong)]">
-                  This is the only step that sends the promotion to BayBlaze. Confirm the summary, then create it once.
+                  This is the only step that sends the {entityLabel} to BayBlaze. Confirm the summary, then create it once.
                 </p>
               </div>
-              <PromotionReview accounts={accounts} compact form={form} />
+              <PromotionReview accounts={selectableAccounts} compact form={form} />
               {apiError ? <ErrorState>{apiError}</ErrorState> : null}
             </div>
           ) : null}
@@ -241,7 +349,7 @@ export function PromoCreationWizard({
         <footer className="shrink-0 border-t border-[var(--bb-line)] bg-white p-3 md:p-4">
           {discardWarning ? (
             <div aria-live="assertive" className="rounded-2xl border border-[var(--bb-warning-soft)] bg-[var(--bb-warning-soft)] p-3">
-              <p className="font-black text-[var(--bb-warning-strong)]">Discard this unsaved promotion?</p>
+              <p className="font-black text-[var(--bb-warning-strong)]">Discard this unsaved {entityLabel}?</p>
               <p className="mt-1 text-sm font-semibold text-[var(--bb-warning-strong)]">Nothing has been created yet, but your entries will be lost.</p>
               <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button onClick={onClose} variant="danger">Discard</Button>
@@ -257,13 +365,13 @@ export function PromoCreationWizard({
                     <ArrowLeft size={17} aria-hidden="true" /> Back
                   </Button>
                 ) : null}
-                {step < 4 ? (
+                {step < finalStep ? (
                   <Button disabled={step === 1 && !form} onClick={continueWizard}>
                     Continue <ArrowRight size={17} aria-hidden="true" />
                   </Button>
                 ) : (
                   <Button loading={submitting} onClick={() => void createPromotion()}>
-                    <Check size={17} aria-hidden="true" /> Create Promotion
+                    <Check size={17} aria-hidden="true" /> {referralAccountMode ? "Create Referral Account" : "Create Promotion"}
                   </Button>
                 )}
               </div>
@@ -327,7 +435,7 @@ function PromotionDetailsStep({
   form: PromotionForm;
   onChange: (updates: Partial<PromotionForm>, clearError?: keyof PromotionFormErrors) => void;
 }) {
-  const eligibleAccounts = accounts.filter((account) => !account.disabled);
+  const eligibleAccounts = accounts.filter((account) => !account.disabled && account.badges.includes("customer"));
 
   return (
     <div className="space-y-4">
@@ -490,4 +598,10 @@ function getFocusableElements(container: HTMLElement | null) {
   return Array.from(container.querySelectorAll<HTMLElement>(
     "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex='-1'])",
   )).filter((element) => !element.hasAttribute("hidden"));
+}
+
+function mergeAccounts(...groups: Account[][]) {
+  const accountsByUid = new Map<string, Account>();
+  groups.flat().forEach((account) => accountsByUid.set(account.uid, account));
+  return Array.from(accountsByUid.values());
 }

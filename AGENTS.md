@@ -51,6 +51,9 @@ POST  /v1/auth/google/callback
 GET   /v1/auth/me
 GET   /v1/admin/accounts
 PATCH /v1/admin/accounts/:uid
+GET   /v1/admin/partners
+PATCH /v1/admin/partners/:uid
+POST  /v1/admin/partners/:uid/approve
 GET   /v1/admin/drivers/map
 GET   /v1/admin/drivers/routes
 POST  /v1/admin/isochrones
@@ -101,6 +104,15 @@ write account docs from the dashboard.
   whether the referrer's freebie was consumed.
 - Disable/enable accounts.
 - Toggle account-level age verification bypass for testing.
+- Manage referral partner applications and accounts in the dedicated Partners
+  section. Operators can approve pending applications, create an active
+  referral account from an existing unified customer account, search for the
+  account by name or email, configure its stable promo code, discount,
+  commission, optional minimum spend, and per-account use restriction, and
+  suspend/reactivate or reject partner access. Creation uses
+  `POST /v1/admin/partners/:uid/approve`; the browser never creates a parallel
+  identity or accepts a client-chosen partner UID outside the authenticated
+  admin route.
 - View drivers on a Google Maps JavaScript map widget using API-provided live
   location snapshots.
 - Use the Map page to show live drivers and manage API-owned coverage areas.

@@ -45,6 +45,21 @@ export type AccountWinReferral = {
   updatedAt: string;
 };
 
+export type ReferralPartnerStatus = "pending" | "active" | "suspended" | "rejected";
+
+export type ReferralPartner = {
+  approvedAt: string;
+  createdAt: string;
+  displayName: string;
+  email: string;
+  referralCode: string;
+  rejectedAt: string;
+  status: ReferralPartnerStatus;
+  suspendedAt: string;
+  uid: string;
+  updatedAt: string;
+};
+
 export type Session = {
   account: Account;
   token: string;
