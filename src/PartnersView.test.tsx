@@ -75,6 +75,32 @@ describe("referral partner administration", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("keeps a 20 percent partner discount as exactly 20 percent", async () => {
+    const user = userEvent.setup();
+    const activePartner = partnerRecord({ referralCode: "TAYLOR20", status: "active" });
+    apiMocks.approveReferralPartner.mockResolvedValue({
+      partner: activePartner,
+      promoCode: promoRecord("TAYLOR20", { discountPercent: 20 }),
+    });
+    render(<PartnersView token="token" />);
+
+    await user.click(await screen.findByRole("button", { name: "New referral account" }));
+    await user.selectOptions(screen.getByLabelText("Referral account"), account.uid);
+    await user.clear(screen.getByLabelText("Promo code"));
+    await user.type(screen.getByLabelText("Promo code"), "TAYLOR20");
+    await user.clear(screen.getByLabelText("Discount percent"));
+    await user.type(screen.getByLabelText("Discount percent"), "20");
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+    await user.click(screen.getByRole("button", { name: "Create Referral Account" }));
+
+    await waitFor(() => expect(apiMocks.approveReferralPartner).toHaveBeenCalledWith(
+      "token",
+      account.uid,
+      expect.objectContaining({ discountPercent: 20 }),
+    ));
+  });
+
   it("opens a pending application with its unified account selected", async () => {
     const user = userEvent.setup();
     apiMocks.loadReferralPartners.mockResolvedValue({
@@ -153,14 +179,14 @@ function partnerRecord(input: Partial<ReferralPartner> = {}): ReferralPartner {
   };
 }
 
-function promoRecord(code: string): AdminPromoCode {
+function promoRecord(code: string, input: Partial<AdminPromoCode> = {}): AdminPromoCode {
   return {
     category: "referral_partner",
     code,
     codeType: "discount",
-    commissionPercent: 30,
+    commissionPercent: input.commissionPercent ?? 30,
     createdAt: "2026-07-22T00:00:00.000Z",
-    discountPercent: 30,
+    discountPercent: input.discountPercent ?? 30,
     minimumSpendCents: 0,
     ownerUid: account.uid,
     singleUsePerAccount: false,

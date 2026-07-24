@@ -474,11 +474,9 @@ function PromotionDetailsStep({
             <Input
               aria-describedby={errors.discountPercent ? "promo-discount-error" : undefined}
               aria-invalid={Boolean(errors.discountPercent)}
+              inputMode="decimal"
               label="Discount percent"
-              max="100"
-              min="1"
               onChange={(event) => onChange({ discountPercent: normalizePercentInput(event.target.value) }, "discountPercent")}
-              type="number"
               value={form.discountPercent}
             />
           </FieldError>
@@ -506,11 +504,9 @@ function PromotionDetailsStep({
             <Input
               aria-describedby={errors.commissionPercent ? "promo-commission-error" : undefined}
               aria-invalid={Boolean(errors.commissionPercent)}
+              inputMode="decimal"
               label="Commission percent"
-              max="100"
-              min="1"
               onChange={(event) => onChange({ commissionPercent: normalizePercentInput(event.target.value) }, "commissionPercent")}
-              type="number"
               value={form.commissionPercent}
             />
           </FieldError>

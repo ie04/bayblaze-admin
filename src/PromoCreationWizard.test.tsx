@@ -84,7 +84,7 @@ describe("promotion creation wizard", () => {
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
     expect(screen.getByLabelText("Referral account")).toBeInTheDocument();
-    expect(screen.getByLabelText("Commission percent")).toHaveValue(30);
+    expect(screen.getByLabelText("Commission percent")).toHaveValue("30");
     expect(screen.queryByRole("option", { name: "Buy 1 get 1 free" })).not.toBeInTheDocument();
   });
 
@@ -108,7 +108,7 @@ describe("promotion creation wizard", () => {
 
     expect(screen.getByLabelText("Promo code")).toHaveValue("PARTNER25");
     expect(screen.getByLabelText("Referral account")).toHaveValue(referralAccount.uid);
-    expect(screen.getByLabelText("Commission percent")).toHaveValue(35);
+    expect(screen.getByLabelText("Commission percent")).toHaveValue("35");
   });
 
   it("shows referral-specific validation beside invalid fields", async () => {

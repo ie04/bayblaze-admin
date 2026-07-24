@@ -138,7 +138,12 @@ export function normalizePromoCode(value: string) {
 }
 
 export function normalizePercentInput(value: string) {
-  return value.replace(/[^\d.]/g, "").slice(0, 5);
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const [whole = "", ...rest] = cleaned.split(".");
+  const decimal = rest.join("").slice(0, 2);
+  const wholePart = whole.slice(0, 3);
+
+  return rest.length ? `${wholePart}.${decimal}` : wholePart;
 }
 
 export function normalizeMoneyInput(value: string) {
