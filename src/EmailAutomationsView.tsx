@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CalendarClock, Mail, Plus, RefreshCw, Save, Send } from "lucide-react";
+import { CalendarClock, Mail, Plus, RefreshCw, Save, Send, X } from "lucide-react";
 
 import {
   createPromotionalEmail,
@@ -77,6 +77,9 @@ export function EmailAutomationsView({ token }: { token: string }) {
   const [campaigns, setCampaigns] = useState<PromotionalEmailCampaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [campaignForm, setCampaignForm] = useState<CampaignForm>(blankCampaign);
+  const [wizardForm, setWizardForm] = useState<CampaignForm>(blankCampaign);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
   const [logs, setLogs] = useState<EmailAutomationLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -125,11 +128,16 @@ export function EmailAutomationsView({ token }: { token: string }) {
 
   function createNewCampaign() {
     setTab("campaigns");
-    setSelectedCampaignId("");
-    setCampaignForm({
+    setWizardStep(0);
+    setWizardForm({
       ...blankCampaign,
       name: `Promotional email ${new Date().toLocaleDateString()}`,
     });
+    setWizardOpen(true);
+  }
+
+  function updateWizard(input: Partial<CampaignForm>) {
+    setWizardForm((current) => ({ ...current, ...input }));
   }
 
   async function saveCampaign() {
@@ -147,6 +155,24 @@ export function EmailAutomationsView({ token }: { token: string }) {
       setNotice(`${response.campaign.name} saved.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save promotional email.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function createCampaignFromWizard() {
+    setBusy("campaign-wizard-save");
+    setError("");
+    setNotice("");
+    try {
+      const response = await createPromotionalEmail(token, toCampaignInput(wizardForm));
+      setCampaigns((current) => reconcileCampaign(current, response.campaign));
+      setSelectedCampaignId(response.campaign.id);
+      setCampaignForm(toCampaignForm(response.campaign));
+      setWizardOpen(false);
+      setNotice(`${response.campaign.name} created.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not create promotional email.");
     } finally {
       setBusy("");
     }
@@ -334,18 +360,34 @@ export function EmailAutomationsView({ token }: { token: string }) {
           </Card>
 
           <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(23rem,0.85fr)]">
-            <CampaignEditor
-              busy={busy}
-              form={campaignForm}
-              onChange={updateCampaign}
-              onSave={() => void saveCampaign()}
-              onSend={() => void sendCampaign(false)}
-              onSchedule={() => void sendCampaign(true)}
-              onSendTest={() => void sendCampaignTest()}
-              setTestEmail={setTestEmail}
-              testEmail={testEmail}
-            />
-            <EmailPreview html={renderCampaignPreview(campaignForm)} subject={campaignForm.subject} />
+            {selectedCampaignId ? (
+              <>
+                <CampaignEditor
+                  busy={busy}
+                  form={campaignForm}
+                  onChange={updateCampaign}
+                  onSave={() => void saveCampaign()}
+                  onSend={() => void sendCampaign(false)}
+                  onSchedule={() => void sendCampaign(true)}
+                  onSendTest={() => void sendCampaignTest()}
+                  setTestEmail={setTestEmail}
+                  testEmail={testEmail}
+                />
+                <EmailPreview html={renderCampaignPreview(campaignForm)} subject={campaignForm.subject} />
+              </>
+            ) : (
+              <Card className="grid min-h-[28rem] place-items-center text-center 2xl:col-span-2">
+                <div className="max-w-sm">
+                  <Plus className="mx-auto mb-3 size-9 text-[var(--bb-blaze)]" aria-hidden="true" />
+                  <h3 className="text-xl font-black text-[var(--bb-charcoal)]">Create a promotional email</h3>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-[var(--bb-muted)]">Use the wizard to draft, preview, and save a new campaign.</p>
+                  <Button className="mt-4" onClick={createNewCampaign}>
+                    <Plus size={17} aria-hidden="true" />
+                    Create promotional email
+                  </Button>
+                </div>
+              </Card>
+            )}
           </div>
         </div>
       ) : null}
@@ -377,6 +419,145 @@ export function EmailAutomationsView({ token }: { token: string }) {
           <EmailLogs logs={logs} />
         </div>
       ) : null}
+
+      {wizardOpen ? (
+        <CampaignWizard
+          busy={busy === "campaign-wizard-save"}
+          form={wizardForm}
+          onChange={updateWizard}
+          onClose={() => setWizardOpen(false)}
+          onCreate={() => void createCampaignFromWizard()}
+          onStepChange={setWizardStep}
+          step={wizardStep}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CampaignWizard({
+  busy,
+  form,
+  onChange,
+  onClose,
+  onCreate,
+  onStepChange,
+  step,
+}: {
+  busy: boolean;
+  form: CampaignForm;
+  onChange: (input: Partial<CampaignForm>) => void;
+  onClose: () => void;
+  onCreate: () => void;
+  onStepChange: (step: number) => void;
+  step: number;
+}) {
+  const canAdvance = step === 0
+    ? Boolean(form.name.trim() && form.subject.trim() && form.headline.trim() && form.body.trim())
+    : true;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/35 p-2 backdrop-blur-sm sm:place-items-center sm:p-5">
+      <section
+        aria-label="Create promotional email"
+        aria-modal="true"
+        className="flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[20px] border border-[var(--bb-line)] bg-white shadow-[var(--bb-shadow-card)] sm:h-auto sm:max-h-[calc(100svh-2.5rem)]"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--bb-line)] p-4 md:p-5">
+          <div>
+            <p className="text-xs font-black uppercase text-[var(--bb-blaze)]">Promotional email</p>
+            <h3 className="text-2xl font-black text-[var(--bb-charcoal)]">Create campaign</h3>
+          </div>
+          <Button aria-label="Close campaign wizard" onClick={onClose} size="icon" variant="ghost">
+            <X size={18} aria-hidden="true" />
+          </Button>
+        </div>
+
+        <div className="grid gap-2 border-b border-[var(--bb-line)] p-3 sm:grid-cols-3">
+          {["Message", "Audience", "Preview"].map((label, index) => (
+            <button
+              className={cx(
+                "min-h-11 rounded-2xl border px-3 text-sm font-black transition",
+                step === index
+                  ? "border-[var(--bb-blaze)] bg-[var(--bb-blaze-soft)] text-[var(--bb-charcoal)]"
+                  : "border-[var(--bb-line)] bg-white text-[var(--bb-muted)]",
+              )}
+              key={label}
+              onClick={() => onStepChange(index)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-4 md:p-5">
+          {step === 0 ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              <Input label="Campaign name" onChange={(event) => onChange({ name: event.target.value })} value={form.name} />
+              <Input label="Subject" onChange={(event) => onChange({ subject: event.target.value })} value={form.subject} />
+              <Input label="Headline" onChange={(event) => onChange({ headline: event.target.value })} value={form.headline} />
+              <Input label="Preheader" onChange={(event) => onChange({ preheader: event.target.value })} value={form.preheader} />
+              <Textarea className="lg:col-span-2" label="Message" onChange={(event) => onChange({ body: event.target.value })} rows={8} value={form.body} />
+              <Input label="Button text" onChange={(event) => onChange({ ctaLabel: event.target.value })} value={form.ctaLabel} />
+              <Input label="Button URL" onChange={(event) => onChange({ ctaUrl: event.target.value })} value={form.ctaUrl} />
+              <Input className="lg:col-span-2" label="Image URL" onChange={(event) => onChange({ imageUrl: event.target.value })} value={form.imageUrl} />
+            </div>
+          ) : null}
+
+          {step === 1 ? (
+            <div className="grid gap-4">
+              <label className="grid gap-2 text-xs font-black uppercase text-[var(--bb-muted)]">
+                Recipients
+                <select
+                  className="min-h-12 rounded-2xl border border-[var(--bb-line)] bg-white px-4 text-base font-bold normal-case text-[var(--bb-charcoal)] outline-none focus:border-[var(--bb-blaze)]"
+                  onChange={(event) => onChange({ recipientMode: event.target.value as PromotionalEmailRecipientMode })}
+                  value={form.recipientMode}
+                >
+                  <option value="customers">All customer accounts</option>
+                  <option value="manual">Manual list</option>
+                  <option value="internal">Internal team</option>
+                  <option value="combined">Customers, manual, and internal</option>
+                </select>
+              </label>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <Textarea label="Manual recipient emails" onChange={(event) => onChange({ manualRecipientsText: event.target.value })} rows={5} value={form.manualRecipientsText} />
+                <Textarea label="Internal recipient emails" onChange={(event) => onChange({ internalRecipientsText: event.target.value })} rows={5} value={form.internalRecipientsText} />
+                <Input label="From email" onChange={(event) => onChange({ fromEmail: event.target.value })} placeholder="Defaults to API sender" value={form.fromEmail} />
+                <Input label="Reply-to" onChange={(event) => onChange({ replyTo: event.target.value })} value={form.replyTo} />
+              </div>
+              <div className="rounded-2xl border border-[var(--bb-line)] bg-[var(--bb-surface-warm)] p-4">
+                <label className="mb-3 flex min-h-11 items-center gap-2 text-sm font-black text-[var(--bb-charcoal)]">
+                  <input checked={form.scheduleEnabled} className="size-4 accent-[var(--bb-blaze)]" onChange={(event) => onChange({ scheduleEnabled: event.target.checked })} type="checkbox" />
+                  Schedule as drip batches
+                </label>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <Input disabled={!form.scheduleEnabled} label="Batch size" min="1" max="100" onChange={(event) => onChange({ batchSize: event.target.value })} type="number" value={form.batchSize} />
+                  <Input disabled={!form.scheduleEnabled} label="Minutes between batches" min="1" onChange={(event) => onChange({ intervalMinutes: event.target.value })} type="number" value={form.intervalMinutes} />
+                  <Input disabled={!form.scheduleEnabled} label="Start at" onChange={(event) => onChange({ startAt: event.target.value })} type="datetime-local" value={form.startAt} />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 2 ? <EmailPreview html={renderCampaignPreview(form)} subject={form.subject} /> : null}
+        </div>
+
+        <div className="grid gap-2 border-t border-[var(--bb-line)] p-3 sm:grid-cols-[auto_1fr_auto_auto]">
+          <Button disabled={step === 0} onClick={() => onStepChange(Math.max(0, step - 1))} variant="secondary">Back</Button>
+          <div />
+          <Button onClick={onClose} variant="ghost">Cancel</Button>
+          {step < 2 ? (
+            <Button disabled={!canAdvance} onClick={() => onStepChange(Math.min(2, step + 1))}>Next</Button>
+          ) : (
+            <Button loading={busy} onClick={onCreate}>
+              <Save size={17} aria-hidden="true" />
+              Create
+            </Button>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
@@ -672,6 +853,7 @@ function renderCampaignPreview(form: CampaignForm) {
     : "";
 
   return [
+    "<style>@import url('https://fonts.googleapis.com/css2?family=Jost:wght@500;600;700;800&display=swap');</style>",
     "<div style=\"margin:0;padding:28px 18px;background:#f6f8f5;color:#000000;font-family:Jost,Avenir,Montserrat,Arial,sans-serif;line-height:1.6\">",
     `<span style="display:none;max-height:0;overflow:hidden">${escapeHtml(form.preheader)}</span>`,
     "<div style=\"max-width:580px;margin:0 auto;background:#ffffff;border:1px solid #d8ded2;border-radius:18px;overflow:hidden;box-shadow:0 18px 44px rgba(17,19,15,0.12)\">",
