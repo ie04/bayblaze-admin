@@ -156,15 +156,13 @@ write account docs from the dashboard.
   percent-off, and commission. Both share code, optional pre-tax minimum, and
   per-account-use fields. The existing `POST /v1/admin/promo-codes` contract
   remains the only create boundary.
-  Admin Promo also includes the storefront-wide price adjustment control. It
-  reads and writes `priceAdjustmentCents` through
-  `GET/PATCH /v1/admin/storefront-settings`; the storefront consumes the public
-  `/v1/storefront/settings` value to adjust item prices sitewide.
-  Admin Promo also includes a storefront-wide AgeChecker testing toggle. It
-  reads and writes `ageVerificationDisabled` through the same storefront
-  settings routes; when enabled, storefront checkout bypasses AgeChecker
-  globally and records testing bypass metadata on orders.
   The storefront no longer hosts an internal promo QR generator route.
+- Manage storefront-wide operational settings in the dedicated Settings
+  section, not inside Promo. Settings has separate sibling entries for
+  sitewide price adjustment and global AgeChecker testing bypass. Both read and
+  write through `GET/PATCH /v1/admin/storefront-settings`; the storefront
+  consumes the public `/v1/storefront/settings` value for price adjustment and
+  global age-verification behavior.
 - View storefront analytics in the Activity section. The dashboard reads
   `GET /v1/admin/storefront-activity/analytics` from `bayblaze-api` for daily
   unique visitor, session, and page-view buckets over time, and reads

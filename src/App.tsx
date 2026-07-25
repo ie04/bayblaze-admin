@@ -19,6 +19,7 @@ import {
   Route,
   Save,
   Search,
+  Settings,
   ShieldCheck,
   Trash2,
   UserCog,
@@ -53,8 +54,9 @@ import { PromoToolsView } from "./PromoToolsView";
 import { EmailAutomationsView } from "./EmailAutomationsView";
 import { StorefrontActivityView } from "./StorefrontActivityView";
 import { PartnersView } from "./PartnersView";
+import { SettingsView } from "./SettingsView";
 
-type View = "accounts" | "partners" | "activity" | "map" | "routes" | "orders" | "promo" | "email";
+type View = "accounts" | "partners" | "activity" | "map" | "routes" | "orders" | "promo" | "settings" | "email";
 type OrderStatusDisplay = {
   cancelled: boolean;
   deleted: boolean;
@@ -70,6 +72,7 @@ const views: Array<{ id: View; icon: ReactNode; label: string }> = [
   { id: "routes", icon: <Route size={18} aria-hidden="true" />, label: "Routes" },
   { id: "orders", icon: <ClipboardList size={18} aria-hidden="true" />, label: "Orders" },
   { id: "promo", icon: <QrCode size={18} aria-hidden="true" />, label: "Promo" },
+  { id: "settings", icon: <Settings size={18} aria-hidden="true" />, label: "Settings" },
   { id: "email", icon: <Mail size={18} aria-hidden="true" />, label: "Email" },
 ];
 
@@ -170,6 +173,7 @@ function App() {
           {activeView === "routes" ? <RoutesView token={session.token} /> : null}
           {activeView === "orders" ? <OrdersView token={session.token} /> : null}
           {activeView === "promo" ? <PromoToolsView token={session.token} /> : null}
+          {activeView === "settings" ? <SettingsView token={session.token} /> : null}
           {activeView === "email" ? <EmailAutomationsView token={session.token} /> : null}
         </section>
       </div>
