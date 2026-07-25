@@ -123,6 +123,15 @@ export function EmailAutomationsView({ token }: { token: string }) {
     );
   }
 
+  function createNewCampaign() {
+    setTab("campaigns");
+    setSelectedCampaignId("");
+    setCampaignForm({
+      ...blankCampaign,
+      name: `Promotional email ${new Date().toLocaleDateString()}`,
+    });
+  }
+
   async function saveCampaign() {
     setBusy("campaign-save");
     setError("");
@@ -245,9 +254,9 @@ export function EmailAutomationsView({ token }: { token: string }) {
       <PageHeader
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => { setSelectedCampaignId(""); setCampaignForm(blankCampaign); }} variant="secondary">
+            <Button onClick={createNewCampaign}>
               <Plus size={17} aria-hidden="true" />
-              New campaign
+              Create promotional email
             </Button>
             <Button loading={busy === "campaign-due"} onClick={() => void processDue()} variant="secondary">
               <CalendarClock size={17} aria-hidden="true" />
@@ -284,7 +293,17 @@ export function EmailAutomationsView({ token }: { token: string }) {
               <h3 className="text-lg font-black text-[var(--bb-charcoal)]">Saved Campaigns</h3>
               <p className="text-sm font-semibold text-[var(--bb-muted)]">Draft, scheduled, and sent promotional emails.</p>
             </div>
-            {campaigns.length === 0 ? <EmptyState title="No campaigns yet">Create the first promotional email.</EmptyState> : null}
+            {campaigns.length === 0 ? (
+              <button
+                className="min-h-32 rounded-[20px] border border-dashed border-[var(--bb-line)] bg-white p-4 text-center transition hover:border-[var(--bb-blaze)]"
+                onClick={createNewCampaign}
+                type="button"
+              >
+                <Plus className="mx-auto mb-3 size-8 text-[var(--bb-blaze)]" aria-hidden="true" />
+                <span className="block font-black text-[var(--bb-charcoal)]">Create a promotional email</span>
+                <span className="mt-1 block text-sm font-semibold text-[var(--bb-muted)]">Build, preview, save, and send a new campaign.</span>
+              </button>
+            ) : null}
             <div className="grid gap-2">
               {campaigns.map((campaign) => (
                 <button
@@ -333,6 +352,16 @@ export function EmailAutomationsView({ token }: { token: string }) {
 
       {!loading && tab === "automations" ? (
         <div className="grid gap-4">
+          <Card className="flex flex-col gap-3 border-[var(--bb-blaze-soft)] bg-[var(--bb-blaze-soft)] sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-black text-[var(--bb-charcoal)]">Promotional emails are separate from order automations.</h3>
+              <p className="text-sm font-semibold leading-6 text-[var(--bb-muted)]">Create a new marketing email from the Promotional emails tab.</p>
+            </div>
+            <Button onClick={createNewCampaign}>
+              <Plus size={17} aria-hidden="true" />
+              Create promotional email
+            </Button>
+          </Card>
           {automations.map((automation) => (
             <AutomationCard
               automation={automation}
