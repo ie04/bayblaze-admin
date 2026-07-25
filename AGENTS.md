@@ -70,6 +70,12 @@ DELETE /v1/admin/promo-codes/:code
 GET   /v1/admin/email-automations
 PATCH /v1/admin/email-automations/:eventType
 POST  /v1/admin/email-automations/:eventType/test
+GET   /v1/admin/promotional-emails
+POST  /v1/admin/promotional-emails
+PATCH /v1/admin/promotional-emails/:campaignId
+POST  /v1/admin/promotional-emails/:campaignId/test
+POST  /v1/admin/promotional-emails/:campaignId/send
+POST  /v1/admin/promotional-emails/send-due
 GET   /v1/admin/orders
 GET   /v1/admin/orders/:orderId
 DELETE /v1/admin/orders/:orderId
@@ -171,11 +177,18 @@ write account docs from the dashboard.
   `GET /v1/admin/storefront-activity/sessions` for recent session details such
   as last page, last event, cart count/value, and lifecycle breadcrumbs. The
   admin browser must not read Firestore directly for activity tracking.
-- Configure API-owned automated email actions in the Email section. The browser
-  edits only `bayblaze-api` automation records and never stores Resend keys.
-  Supported automations include `order_placed`, with editable enablement,
-  recipient mode, sender/reply-to, subject, text, HTML, internal recipients,
-  test sends, and recent send logs.
+- Configure API-owned promotional email campaigns and automated transactional
+  email actions in the Email section. The browser edits only `bayblaze-api`
+  records and never stores Resend keys. Promotional campaigns use structured
+  fields for subject, preheader, headline, message, image URL, CTA, sender,
+  recipient source, manual/internal recipients, and optional drip scheduling;
+  the dashboard renders a graphical email preview instead of asking operators
+  to edit raw HTML. Sending can queue immediate batches or scheduled batches;
+  `POST /v1/admin/promotional-emails/send-due` processes due batches and should
+  be called by an external scheduler for fully automatic production drip sends.
+  Supported transactional automations include `order_placed`, with editable
+  enablement, recipient mode, sender/reply-to, subject, plain-text fallback,
+  internal recipients, preview, test sends, and recent send logs.
 
 The dashboard renders route plots from API data and draws active coverage
 polygons inside the Map page's Google Map. The live map is the one browser

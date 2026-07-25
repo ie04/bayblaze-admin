@@ -14,6 +14,8 @@ import type {
   EmailRecipientMode,
   IsochronePlot,
   MedusaOrder,
+  PromotionalEmailCampaign,
+  PromotionalEmailRecipientMode,
   ReferralPartner,
   ReferralPartnerStatus,
   Session,
@@ -83,6 +85,28 @@ type EmailAutomationUpdateInput = {
 type StorefrontSettingsUpdateInput = {
   ageVerificationDisabled?: boolean;
   priceAdjustmentCents?: number;
+};
+
+export type PromotionalEmailInput = {
+  body?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  fromEmail?: string;
+  headline?: string;
+  imageUrl?: string;
+  internalRecipientEmails?: string[];
+  manualRecipientEmails?: string[];
+  name?: string;
+  preheader?: string;
+  recipientMode?: PromotionalEmailRecipientMode;
+  replyTo?: string;
+  schedule?: {
+    batchSize?: number;
+    enabled?: boolean;
+    intervalMinutes?: number;
+    startAt?: string;
+  };
+  subject?: string;
 };
 
 export function loadStoredSession(): Session | null {
@@ -364,6 +388,53 @@ export function sendEmailAutomationTest(
   input: { recipientEmail: string },
 ) {
   return request<{ sent: number; skipped: boolean }>(`/v1/admin/email-automations/${encodeURIComponent(eventType)}/test`, {
+    body: input,
+    method: "POST",
+    token,
+  });
+}
+
+export function loadPromotionalEmails(token: string) {
+  return request<{ campaigns: PromotionalEmailCampaign[] }>("/v1/admin/promotional-emails", { token });
+}
+
+export function createPromotionalEmail(token: string, input: PromotionalEmailInput) {
+  return request<{ campaign: PromotionalEmailCampaign }>("/v1/admin/promotional-emails", {
+    body: input,
+    method: "POST",
+    token,
+  });
+}
+
+export function updatePromotionalEmail(token: string, campaignId: string, input: PromotionalEmailInput) {
+  return request<{ campaign: PromotionalEmailCampaign }>(`/v1/admin/promotional-emails/${encodeURIComponent(campaignId)}`, {
+    body: input,
+    method: "PATCH",
+    token,
+  });
+}
+
+export function sendPromotionalEmailTest(token: string, campaignId: string, input: { recipientEmail: string }) {
+  return request<{ sent: number; skipped: boolean }>(`/v1/admin/promotional-emails/${encodeURIComponent(campaignId)}/test`, {
+    body: input,
+    method: "POST",
+    token,
+  });
+}
+
+export function startPromotionalEmailSend(token: string, campaignId: string, input: { scheduled?: boolean }) {
+  return request<{ queuedBatches: number; queuedRecipients: number; sent: number; failed: number; processedBatches: number; campaign: PromotionalEmailCampaign }>(
+    `/v1/admin/promotional-emails/${encodeURIComponent(campaignId)}/send`,
+    {
+      body: input,
+      method: "POST",
+      token,
+    },
+  );
+}
+
+export function sendDuePromotionalEmails(token: string, input: { campaignId?: string; limit?: number } = {}) {
+  return request<{ sent: number; failed: number; processedBatches: number }>("/v1/admin/promotional-emails/send-due", {
     body: input,
     method: "POST",
     token,

@@ -287,6 +287,39 @@ export type EmailAutomationLog = {
   to: string[];
 };
 
+export type PromotionalEmailRecipientMode = "customers" | "manual" | "internal" | "combined";
+
+export type PromotionalEmailCampaign = {
+  body: string;
+  createdAt: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  failedCount: number;
+  fromEmail: string;
+  headline: string;
+  id: string;
+  imageUrl: string;
+  internalRecipientEmails: string[];
+  lastQueuedAt: string;
+  manualRecipientEmails: string[];
+  name: string;
+  preheader: string;
+  queuedBatchCount: number;
+  queuedRecipientCount: number;
+  recipientMode: PromotionalEmailRecipientMode;
+  replyTo: string;
+  schedule: {
+    batchSize: number;
+    enabled: boolean;
+    intervalMinutes: number;
+    startAt: string;
+  };
+  sentCount: number;
+  status: string;
+  subject: string;
+  updatedAt: string;
+};
+
 export type MedusaOrder = Record<string, unknown> & {
   id?: string;
   display_id?: number;
