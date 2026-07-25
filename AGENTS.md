@@ -141,7 +141,9 @@ write account docs from the dashboard.
   `0`. Admin Promo can also set `singleUsePerAccount`, which lets each signed-in
   customer account successfully use that promo on only one checkout; the
   backend records usage after successful orders and rejects later attempts by
-  the same account.
+  the same account. BayBlaze Win referral promos are API-managed/read-only here
+  and default to one successful use per customer account, with the referrer's
+  own account blocked from using its generated friend code.
   Referral partner promos are individualized records in the same promo system.
   Admins select an existing unified BayBlaze account as the owner and configure
   the customer discount percentage, partner commission percentage, and optional
