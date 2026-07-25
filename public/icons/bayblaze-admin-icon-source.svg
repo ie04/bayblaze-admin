@@ -1,0 +1,60 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="baseGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(706 230) rotate(133) scale(880 760)">
+      <stop stop-color="#3a3a37"/>
+      <stop offset="0.34" stop-color="#151613"/>
+      <stop offset="1" stop-color="#030403"/>
+    </radialGradient>
+    <linearGradient id="brush" x1="150" y1="844" x2="884" y2="134" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="flameFill" x1="512" y1="130" x2="512" y2="820" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="0.72" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f1f3ef"/>
+    </linearGradient>
+    <linearGradient id="badgeFill" x1="626" y1="586" x2="850" y2="816" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f26a1b"/>
+      <stop offset="1" stop-color="#b93b10"/>
+    </linearGradient>
+    <filter id="softShadow" x="130" y="94" width="760" height="826" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="26" stdDeviation="32" flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+    <filter id="grain" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="3" seed="11" result="noise"/>
+      <feColorMatrix in="noise" type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 0.11"/>
+      </feComponentTransfer>
+      <feBlend in2="SourceGraphic" mode="soft-light"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="210" fill="url(#baseGlow)"/>
+  <rect width="1024" height="1024" rx="210" fill="url(#brush)" opacity="0.9" filter="url(#grain)"/>
+  <path opacity="0.16" d="M104 820C258 710 580 432 786 106" stroke="#ffffff" stroke-width="68" stroke-linecap="round"/>
+  <path opacity="0.1" d="M160 910C338 760 666 460 920 178" stroke="#ffffff" stroke-width="24" stroke-linecap="round"/>
+
+  <g filter="url(#softShadow)">
+    <path
+      d="M513 126C566 220 544 306 481 384C430 447 356 507 337 613C329 658 338 698 364 733C326 711 292 677 270 637C239 583 235 518 261 459C272 509 292 547 326 575C305 463 361 386 433 312C490 254 534 196 513 126Z"
+      fill="url(#flameFill)"
+    />
+    <path
+      d="M654 346C724 441 780 524 760 631C750 687 720 735 676 770C701 704 682 653 632 600C586 552 567 508 594 448C552 493 505 541 484 604C462 670 489 731 546 798C421 772 335 692 335 574C335 474 396 398 467 322C540 244 570 186 548 126C661 218 669 294 654 346Z"
+      fill="url(#flameFill)"
+    />
+    <path
+      d="M511 498C550 549 599 604 591 676C586 729 553 775 505 806C526 750 515 705 476 662C438 619 430 574 511 498Z"
+      fill="#050605"
+    />
+  </g>
+
+  <g filter="url(#softShadow)">
+    <path d="M724 562L838 606V704C838 782 791 842 724 868C657 842 610 782 610 704V606L724 562Z" fill="url(#badgeFill)"/>
+    <path d="M724 595L807 627V702C807 759 775 803 724 827C673 803 641 759 641 702V627L724 595Z" fill="#151613" fill-opacity="0.18"/>
+    <path d="M676 713L707 744L775 669" stroke="#ffffff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
