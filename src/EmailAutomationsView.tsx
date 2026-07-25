@@ -127,7 +127,6 @@ export function EmailAutomationsView({ token }: { token: string }) {
   }
 
   function createNewCampaign() {
-    setTab("campaigns");
     setWizardStep(0);
     setWizardForm({
       ...blankCampaign,
@@ -457,11 +456,11 @@ function CampaignWizard({
     : true;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-black/35 p-2 backdrop-blur-sm sm:place-items-center sm:p-5">
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/45 p-2 backdrop-blur-sm sm:place-items-center sm:p-5">
       <section
         aria-label="Create promotional email"
         aria-modal="true"
-        className="flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[20px] border border-[var(--bb-line)] bg-white shadow-[var(--bb-shadow-card)] sm:h-auto sm:max-h-[calc(100svh-2.5rem)]"
+        className="flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[20px] border border-[var(--bb-line)] bg-white shadow-[var(--bb-shadow-card)] ring-1 ring-black/5 sm:h-auto sm:max-h-[calc(100svh-2.5rem)]"
         role="dialog"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--bb-line)] p-4 md:p-5">
